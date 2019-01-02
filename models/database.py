@@ -28,6 +28,9 @@ class Thing(Base):
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
 
+    def __repr__(self):
+        return 'Thing(id={}, name="{}", type="{}", device_id="{}", vnode_id={}, visible={})'.format(self.id, self.name, self.type, self.device_id, self.vnode_id, self.visible)
+
     def last_state(self):
         return State.query.filter_by(thing_id=self.id).order_by(State.when.desc()).first()
 
@@ -62,6 +65,7 @@ class Thing(Base):
 
         db.add(state)
         db.commit()
+        return self, state
 
     @staticmethod
     def get_by_type_and_device_id(db, node_type, device_id, vnode_id):

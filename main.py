@@ -29,18 +29,26 @@ rule_queue = Queue()
 
 def rule_executer_thread(queue):
     global request_shutdown
-    rulelog.info("Hi")
+    import rules
+    rulelog.info("Staring up")
     while not request_shutdown:
         while True:
             try:
-                item = queue.get_nowait()
-                if not item:
+                event = queue.get_nowait()
+                if not event:
                     break
+                thing, state = event
+                for rule in rules.triggers.get(thing, []):
+                    try:
+                        rule()
+                    except Exception:
+                        rulelog.exception("Error while executing rule {}".format(rules.all_rules[rule]))
                 queue.task_done()
             except Empty:
                 break
-        time.sleep(1)
-    rulelog.info("Bye")
+
+        time.sleep(0.2)
+    rulelog.info("Shutting down")
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
@@ -70,8 +78,8 @@ def on_mqtt_message(client, userdata, message):
     thing = Thing.get_by_type_and_device_id(db_session, node_type, device_id, vnode_id)
     if not thing:
         return
-    print("Thing {} has new event".format(thing.name))
-    thing.process_status(db_session, message.payload.decode("ascii"))
+    print("Thing {} sent new state".format(thing.name))
+    rule_queue.put(thing.process_status(db_session, message.payload.decode("ascii")))
 
 
 def shutdown(*args):
@@ -118,7 +126,7 @@ def main():
     print("Rule Execution")
 
     try:
-        while(True):
+        while True:
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass
