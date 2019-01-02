@@ -1,0 +1,3 @@
+paho-mqtt
+SQLAlchemy
+psycopg2-binary

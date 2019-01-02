@@ -1,0 +1,6 @@
+__pychache__/
+*.pyc
+config.py
+.idea/
+.directory
+venv/

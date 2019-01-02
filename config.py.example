@@ -1,0 +1,6 @@
+SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+MQTT_HOST = "1.2.3.4"
+MQTT_USER = "username"
+MQTT_PASS = "password"
