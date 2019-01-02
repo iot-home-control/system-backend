@@ -63,7 +63,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
         db = shared.db_session_factory()
-        ts = [thing.get_state_topic() for thing in db.query(Thing).all()]
+        ts = [thing.get_state_topic() for thing in db.query(Thing).all()] + ["/alive"]
         db.close()
         client.subscribe(list(zip(ts, [0]*len(ts))))
 
@@ -78,16 +78,29 @@ def on_mqtt_disconnect(client, userdata, rc):
 
 def on_mqtt_message(client, userdata, message):
     try:
-        _, node_type, vnode, _ = message.topic.split("/", maxsplit=4)
-        device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
-
         db = shared.db_session_factory()
-        thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
-        if not thing:
-            return
-        print("Thing {} sent new state".format(thing.name))
-        res = thing.process_status(db, message.payload.decode("ascii"))
-        rule_queue.put(res)
+        if message.topic.startswith("/alive"):
+            device_id = message.payload.decode("ascii")
+            entry = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
+            print("Thing {} is alive".format(device_id))
+            if entry:
+                entry.last_seen = datetime.datetime.utcnow()
+                db.commit()
+            else:
+                entry = LastSeen()
+                entry.device_id = device_id
+                entry.last_seen = datetime.datetime.utcnow()
+                db.add(entry)
+                db.commit()
+        else:
+            _, node_type, vnode, _ = message.topic.split("/", maxsplit=4)
+            device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
+            thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
+            if not thing:
+                return
+            print("Thing {} sent new state".format(thing.name))
+            res = thing.process_status(db, message.payload.decode("ascii"))
+            rule_queue.put(res)
         db.close()
     except Exception:
         mqttlog.exception("Uncaught exception in on_mqtt_message")
