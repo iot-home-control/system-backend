@@ -1,4 +1,3 @@
-from shared import db_engine
 import sqlalchemy as sa
 from sqlalchemy.ext.declarative import declarative_base
 from enum import Enum
@@ -65,7 +64,7 @@ class Thing(Base):
 
         db.add(state)
         db.commit()
-        return self, state
+        return self.id, type(self), state.id
 
     @staticmethod
     def get_by_type_and_device_id(db, node_type, device_id, vnode_id):
@@ -76,6 +75,24 @@ class Thing(Base):
         thing = db.query(cls).filter_by(type=node_type, device_id=device_id,
                                         vnode_id=vnode_id).one_or_none()
         return thing
+
+    @staticmethod
+    def get(db, thing_type, name=None, id=None, device_id=None, vnode_id=None):
+        from models.things import thing_type_table
+        cls = thing_type_table[thing_type]
+        query = db.query(cls)
+        if name:
+            query = query.filter(Thing.name == name)
+        if id:
+            query = query.filter(Thing.id == id)
+        if device_id:
+            query = query.filter(Thing.device_id == device_id)
+        if vnode_id:
+            if not device_id:
+                raise ValueError("vnode_id requires device_id")
+            query = query.filter(Thing.vnode_id == vnode_id)
+        things = query.all()
+        return things
 
 
 class State(Base):

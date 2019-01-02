@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
+import mq
 from pprint import pprint
-
-from shared import db_engine
+import shared
 from models.database import Thing, State, LastSeen
 import logging
-import paho.mqtt.client as mqttm
 import signal
 import threading
 import time
 import os
-from config import *
-from sqlalchemy.orm import sessionmaker
+import config
 import datetime
 from queue import Queue, Empty
+import rules
 
 logging.basicConfig(level=logging.INFO)
 mqttlog = logging.getLogger("mqtt")
@@ -21,33 +20,37 @@ rulelog = logging.getLogger("rule")
 
 request_shutdown = False
 did_shutdown = False
-mqtt = None
 rule_executor = None
-db_session = None
+db_session_factory = None
 rule_queue = Queue()
 
 
 def rule_executer_thread(queue):
-    global request_shutdown
-    import rules
     rulelog.info("Staring up")
+    db = shared.db_session_factory()
+    rules.init(db)
+    db.close()
     while not request_shutdown:
-        while True:
-            try:
-                event = queue.get_nowait()
-                if not event:
-                    break
-                thing, state = event
-                for rule in rules.triggers.get(thing, []):
-                    try:
-                        rule()
-                    except Exception:
-                        rulelog.exception("Error while executing rule {}".format(rules.all_rules[rule]))
-                queue.task_done()
-            except Empty:
-                break
-
-        time.sleep(0.2)
+        try:
+            event = queue.get(block=True, timeout=0.2)
+            if not event:
+                rulelog.error("event in queue is None")
+                continue
+            thing_id, thing_class, state_id = event
+            for rule in rules.triggers.get(thing_id, []):
+                db = shared.db_session_factory()
+                try:
+                    revent = rules.RuleEvent(db.query(thing_class).get(thing_id), db.query(State).get(state_id))
+                    rule(revent)
+                    db.commit()
+                except Exception:
+                    rulelog.exception("Error while executing rule {}".format(rules.all_rules[rule]))
+                db.close()
+            queue.task_done()
+        except Empty:
+            pass
+        except Exception:
+            rulelog.exception("Uncaught Execption in rule_executer_thread")
     rulelog.info("Shutting down")
 
 
@@ -59,7 +62,9 @@ def on_mqtt_connect(client, userdata, flags, rc):
         return
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
-        ts = [thing.get_state_topic() for thing in db_session.query(Thing).all()]
+        db = shared.db_session_factory()
+        ts = [thing.get_state_topic() for thing in db.query(Thing).all()]
+        db.close()
         client.subscribe(list(zip(ts, [0]*len(ts))))
 
 
@@ -72,27 +77,30 @@ def on_mqtt_disconnect(client, userdata, rc):
 
 
 def on_mqtt_message(client, userdata, message):
-    _, node_type, vnode, _ = message.topic.split("/", maxsplit=4)
-    device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
+    try:
+        _, node_type, vnode, _ = message.topic.split("/", maxsplit=4)
+        device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
 
-    thing = Thing.get_by_type_and_device_id(db_session, node_type, device_id, vnode_id)
-    if not thing:
-        return
-    print("Thing {} sent new state".format(thing.name))
-    rule_queue.put(thing.process_status(db_session, message.payload.decode("ascii")))
+        db = shared.db_session_factory()
+        thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
+        if not thing:
+            return
+        print("Thing {} sent new state".format(thing.name))
+        res = thing.process_status(db, message.payload.decode("ascii"))
+        rule_queue.put(res)
+        db.close()
+    except Exception:
+        mqttlog.exception("Uncaught exception in on_mqtt_message")
 
 
 def shutdown(*args):
     global did_shutdown
-    global mqtt
-    global rule_executor
     global request_shutdown
     if did_shutdown:
         return
     did_shutdown = True
     print("Shutting down:", end=" ")
-    mqtt.disconnect()
-    mqtt.loop_stop()
+    mq.stop()
     print("MQTT", end=", ")
 
     request_shutdown = True
@@ -102,23 +110,11 @@ def shutdown(*args):
 
 
 def main():
-    db_session_maker = sessionmaker(bind=db_engine)
-    global db_session
-    db_session = db_session_maker()
-    global mqtt
     global rule_executor
-    global rule_queue
     signal.signal(signal.SIGTERM, shutdown)
 
     print("Starting:", end=" ")
-    mqtt = mqttm.Client()
-    mqtt.on_connect = on_mqtt_connect
-    mqtt.on_disconnect = on_mqtt_disconnect
-    mqtt.on_message = on_mqtt_message
-    mqtt.username_pw_set(MQTT_USER,
-                         MQTT_PASS)
-    mqtt.connect_async(MQTT_HOST)
-    mqtt.loop_start()
+    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
     print("MQTT", end=", ")
 
     rule_executor = threading.Thread(target=rule_executer_thread, args=(rule_queue,))
@@ -130,12 +126,9 @@ def main():
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass
-#    finally:
 
     shutdown()
 
 
 if __name__ == "__main__":
     main()
-
-
