@@ -13,14 +13,18 @@ import config
 import datetime
 from queue import Queue, Empty
 import rules
+import timer
 
 logging.basicConfig(level=logging.INFO)
 mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
+timerlog = logging.getLogger("timer")
+
 
 request_shutdown = False
 did_shutdown = False
 rule_executor = None
+timer_checker = None
 db_session_factory = None
 rule_queue = Queue()
 
@@ -40,7 +44,7 @@ def rule_executer_thread(queue):
             for rule in rules.triggers.get(thing_id, []):
                 db = shared.db_session_factory()
                 try:
-                    revent = rules.RuleEvent(db.query(thing_class).get(thing_id), db.query(State).get(state_id))
+                    revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id), db.query(State).get(state_id))
                     rule(revent)
                     db.commit()
                 except Exception:
@@ -52,6 +56,16 @@ def rule_executer_thread(queue):
         except Exception:
             rulelog.exception("Uncaught Execption in rule_executer_thread")
     rulelog.info("Shutting down")
+
+
+def timer_checker_thread():
+    timerlog.info("Starting up")
+    while not request_shutdown:
+        try:
+            timer.process_timers()
+            time.sleep(1)
+        except Exception:
+            timerlog.exception("Uncaught Execption in timer_checker_thread")
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
@@ -118,12 +132,15 @@ def shutdown(*args):
 
     request_shutdown = True
     rule_executor.join()
-    print("Rule Execution")
+    print("Rule Execution", end=", ")
+    timer_checker.join()
+    print("Timer Checker")
     logging.shutdown()
 
 
 def main():
     global rule_executor
+    global timer_checker
     signal.signal(signal.SIGTERM, shutdown)
 
     print("Starting:", end=" ")
@@ -132,7 +149,13 @@ def main():
 
     rule_executor = threading.Thread(target=rule_executer_thread, args=(rule_queue,))
     rule_executor.start()
-    print("Rule Execution")
+    print("Rule Execution", end=", ")
+
+    timer_checker = threading.Thread(target=timer_checker_thread)
+    timer_checker.start()
+    print("Timer Checker")
+
+    rules.init_timers()
 
     try:
         while True:

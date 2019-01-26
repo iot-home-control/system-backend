@@ -1,9 +1,14 @@
 from pprint import pprint
 import models.database
+import timer
+import datetime
+from enum import Enum
+
 
 all_rules = {}
 triggers = {}
 rule_inits = []
+
 
 def init(db):
     for func in rule_inits:
@@ -23,9 +28,15 @@ class Thing:
 
 
 class RuleEvent:
-    def __init__(self, thing, state):
+    def __init__(self, source, thing, state):
+        self.source = source
         self.thing = thing
         self.state = state
+
+
+class EventSource(Enum):
+    Timer = 1
+    Trigger = 2
 
 
 def rule(name, *trigger, **params):
@@ -45,6 +56,10 @@ def rule(name, *trigger, **params):
     return wrapper
 
 
+def init_timers():
+    timer.add_timer("Test Timer", timer_test_rule, interval=datetime.timedelta(seconds=10))
+
+
 @rule("Test", Thing("switch", name="Deckenlicht"))
 def test_rule(event):
     thing, state = event.thing, event.state
@@ -56,3 +71,7 @@ def test_rule(event):
         thing.on()
 
 
+@rule("Timer_test")
+def timer_test_rule(event):
+    source, thing, state = event.source, event.thing, event.state
+    print(source, thing, state)

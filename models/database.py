@@ -105,3 +105,11 @@ class State(Base):
     status_str = sa.Column(sa.String)
     status_bool = sa.Column(sa.Boolean)
     status_float = sa.Column(sa.Float)
+
+
+class Timer(Base):
+    __tablename__ = "timer"
+    id = sa.Column(sa.String, primary_key=True)
+    schedule = sa.Column(sa.DateTime, nullable=False)
+    function_id = sa.Column(sa.String, nullable=False)
+    data = sa.Column(sa.JSON, nullable=False, default=lambda: {})
