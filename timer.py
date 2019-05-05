@@ -1,5 +1,4 @@
 import datetime
-import timerqueue
 import shared
 from models.database import Timer
 from pprint import pformat
