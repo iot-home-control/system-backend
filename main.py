@@ -14,19 +14,26 @@ import datetime
 from queue import Queue, Empty
 import rules
 import timer
+import websockets
+import asyncio
+import json
 
 logging.basicConfig(level=logging.INFO)
 mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
 timerlog = logging.getLogger("timer")
+wslog = logging.getLogger("websocket")
 
 
 request_shutdown = False
 did_shutdown = False
 rule_executor = None
 timer_checker = None
+websocket = None
 db_session_factory = None
 rule_queue = Queue()
+ws_event_loop = None
+connected_wss = set()
 
 
 def rule_executer_thread(queue):
@@ -66,6 +73,45 @@ def timer_checker_thread():
             time.sleep(1)
         except Exception:
             timerlog.exception("Uncaught Execption in timer_checker_thread")
+
+
+async def send_to_all(msg):
+    if not connected_wss:
+        return
+    await asyncio.wait([ws.send(msg) for ws in connected_wss])
+
+
+async def handle_ws_connection(websocket, path):
+    wslog.info("Client {} connected".format(websocket.remote_address))
+    connected_wss.add(websocket)
+    async for message in websocket:
+        try:
+            data = json.loads(message)
+            msg_type = data.get("type")
+            if msg_type:
+                if msg_type == "message":
+                    await send_to_all(json.dumps(data))
+            else:
+                wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
+        except json.JSONDecodeError as err:
+            wslog.warning("Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
+    else:
+        wslog.info("Client {} disconnected".format(websocket.remote_address))
+        connected_wss.remove(websocket)
+
+
+def ws_thread():
+    wslog.info("Starting up")
+    try:
+        global ws_event_loop
+        ws_event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(ws_event_loop)
+        ws_server = websockets.serve(handle_ws_connection, getattr(config, "BIND_IP", "localhost"), 8765)
+        asyncio.get_event_loop().run_until_complete(ws_server)
+        asyncio.get_event_loop().run_forever()
+        wslog.info("Shutting down")
+    except Exception:
+        wslog.exception("Uncaught Exception in ws_thread")
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
@@ -134,13 +180,18 @@ def shutdown(*args):
     rule_executor.join()
     print("Rule Execution", end=", ")
     timer_checker.join()
-    print("Timer Checker")
+    print("Timer Checker", end=", ")
+    ws_event_loop.call_soon_threadsafe(ws_event_loop.run_until_complete(ws_event_loop.shutdown_asyncgens()))
+    ws_event_loop.call_soon_threadsafe(ws_event_loop.stop)
+    websocket.join()
+    print("WebSockets")
     logging.shutdown()
 
 
 def main():
     global rule_executor
     global timer_checker
+    global websocket
     signal.signal(signal.SIGTERM, shutdown)
 
     print("Starting:", end=" ")
@@ -153,7 +204,11 @@ def main():
 
     timer_checker = threading.Thread(target=timer_checker_thread)
     timer_checker.start()
-    print("Timer Checker")
+    print("Timer Checker", end=", ")
+
+    websocket = threading.Thread(target=ws_thread)
+    websocket.start()
+    print("WebSockets")
 
     rules.init_timers()
 

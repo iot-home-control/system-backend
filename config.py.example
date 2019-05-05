@@ -4,3 +4,5 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 MQTT_HOST = "1.2.3.4"
 MQTT_USER = "username"
 MQTT_PASS = "password"
+
+BIND_IP = "127.0.0.1"
