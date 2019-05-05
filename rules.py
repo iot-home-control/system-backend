@@ -74,4 +74,4 @@ def test_rule(event):
 @rule("Timer_test")
 def timer_test_rule(event):
     source, thing, state = event.source, event.thing, event.state
-    print(source, thing, state)
+    # print(source, thing, state)
