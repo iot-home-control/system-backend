@@ -107,11 +107,18 @@ def ws_thread():
         ws_event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(ws_event_loop)
         ws_server = websockets.serve(handle_ws_connection, getattr(config, "BIND_IP", "localhost"), 8765)
-        asyncio.get_event_loop().run_until_complete(ws_server)
-        asyncio.get_event_loop().run_forever()
+        ws_event_loop.run_until_complete(ws_server)
+        ws_event_loop.run_forever()
         wslog.info("Shutting down")
     except Exception:
         wslog.exception("Uncaught Exception in ws_thread")
+        
+
+async def ws_shutdown():
+    if connected_wss:
+        await asyncio.wait([ws.close(reason="Shutting down") for ws in connected_wss])
+    ws_event_loop.stop()
+    await ws_event_loop.shutdown_asyncgens()
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
@@ -181,8 +188,8 @@ def shutdown(*args):
     print("Rule Execution", end=", ")
     timer_checker.join()
     print("Timer Checker", end=", ")
-    ws_event_loop.call_soon_threadsafe(ws_event_loop.run_until_complete(ws_event_loop.shutdown_asyncgens()))
-    ws_event_loop.call_soon_threadsafe(ws_event_loop.stop)
+    #ws_event_loop.call_soon_threadsafe(ws_shutdown)
+    asyncio.run_coroutine_threadsafe(ws_shutdown(), ws_event_loop)
     websocket.join()
     print("WebSockets")
     logging.shutdown()
