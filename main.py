@@ -172,7 +172,7 @@ def on_mqtt_message(client, userdata, message):
             thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
             if not thing:
                 return
-            print("Thing {} sent new state".format(thing.name))
+            print("Thing {} {} sent new state".format(thing.type, thing.name))
             res = thing.process_status(db, message.payload.decode("ascii"))
             rule_queue.put(res)
         db.close()

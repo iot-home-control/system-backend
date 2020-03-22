@@ -35,8 +35,8 @@ class Thing(Base):
     def __repr__(self):
         return 'Thing(id={}, name="{}", type="{}", device_id="{}", vnode_id={}, visible={})'.format(self.id, self.name, self.type, self.device_id, self.vnode_id, self.visible)
 
-    def last_state(self):
-        return State.query.filter_by(thing_id=self.id).order_by(State.when.desc()).first()
+    def last_state(self, db):
+        return db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
 
     def get_state_topic(self):
         return "/{type}/{device_id}/state".format(type=self.type, device_id=self.get_full_name())
