@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import mq
+import paho.mqtt.client as mqttm
 from pprint import pprint
 import shared
 from models.database import Thing, State, LastSeen
+from models.things import Shelly
 import logging
 import signal
 import threading
@@ -18,7 +20,7 @@ import websockets
 import asyncio
 import json
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
 timerlog = logging.getLogger("timer")
@@ -160,8 +162,13 @@ def on_mqtt_message(client, userdata, message):
                 db.add(entry)
                 db.commit()
         else:
-            _, node_type, vnode, _ = message.topic.split("/", maxsplit=4)
-            device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
+            start, node_type, vnode, stop = message.topic.split("/", maxsplit=4)
+            if start == "shellies":
+                device_id = node_type
+                vnode_id = stop
+                node_type = "shelly"
+            else:
+                device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
             thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
             if not thing:
                 return

@@ -1,22 +1,40 @@
-from models.database import Thing, DataType
 import mq
+from models.database import Thing, DataType, State
+import datetime
+
 
 class TemperatureSensor(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'temperature'
+    }
+
     def get_data_type(self):
         return DataType.Float
 
 
 class HumiditySensor(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'humidity'
+    }
+
     def get_data_type(self):
         return DataType.Float
 
 
 class LEDs(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'leds'
+    }
+
     def get_data_type(self):
         return DataType.String
 
 
 class Switch(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'switch'
+    }
+
     def get_data_type(self):
         return DataType.Boolean
 
@@ -28,8 +46,36 @@ class Switch(Thing):
 
 
 class Button(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'button'
+    }
+
     def get_data_type(self):
         return DataType.Boolean
+
+
+class Shelly(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shelly'
+    }
+
+    def get_data_type(self):
+        return DataType.Boolean
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/relay/{vnode_id}".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return "shellies/{device_id}/relay/{vnode_id}/command".format(type=self.type, device_id=self.device_id,
+                                                                      vnode_id=self.vnode_id)
+
+    def process_status(self, db, state):
+        last_state = self.last_state()
+        if last_state.value_bool != state.lower() in ["on", "yes", "true", "1"]:
+            state = f"unknown,{state}"
+            return super().process_status(db, state)
+        return self, last_state
 
 
 thing_type_table = {
@@ -38,4 +84,5 @@ thing_type_table = {
     "humidity": HumiditySensor,
     "leds": LEDs,
     "button": Button,
+    "shelly": Shelly,
 }

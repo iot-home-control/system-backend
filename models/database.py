@@ -27,6 +27,11 @@ class Thing(Base):
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
 
+    __mapper_args__ = {
+        'polymorphic_on': type,
+        'polymorphic_identity': 'thing'
+    }
+
     def __repr__(self):
         return 'Thing(id={}, name="{}", type="{}", device_id="{}", vnode_id={}, visible={})'.format(self.id, self.name, self.type, self.device_id, self.vnode_id, self.visible)
 
