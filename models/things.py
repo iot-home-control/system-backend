@@ -1,6 +1,5 @@
 import mq
-from models.database import Thing, DataType, State
-import datetime
+from models.database import Thing, DataType, LastSeen
 
 
 class TemperatureSensor(Thing):
@@ -72,10 +71,11 @@ class Shelly(Thing):
 
     def process_status(self, db, state):
         last_state = self.last_state(db)
-        if last_state.value_bool != state.lower() in ["on", "yes", "true", "1"]:
+        LastSeen.update(db, self.device_id)
+        if last_state.status_bool != (state.lower() in ["on", "yes", "true", "1"]):
             state = f"unknown,{state}"
             return super().process_status(db, state)
-        return self, last_state
+        return self.id, type(self), last_state.id
 
 
 thing_type_table = {

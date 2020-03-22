@@ -150,17 +150,7 @@ def on_mqtt_message(client, userdata, message):
         db = shared.db_session_factory()
         if message.topic.startswith("/alive"):
             device_id = message.payload.decode("ascii")
-            entry = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
-            print("Thing {} is alive".format(device_id))
-            if entry:
-                entry.last_seen = datetime.datetime.utcnow()
-                db.commit()
-            else:
-                entry = LastSeen()
-                entry.device_id = device_id
-                entry.last_seen = datetime.datetime.utcnow()
-                db.add(entry)
-                db.commit()
+            LastSeen.update(db, device_id)
         else:
             start, node_type, vnode, stop = message.topic.split("/", maxsplit=4)
             if start == "shellies":

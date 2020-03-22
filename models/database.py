@@ -17,6 +17,20 @@ class LastSeen(Base):
     device_id = sa.Column(sa.String, primary_key=True)
     last_seen = sa.Column(sa.DateTime)
 
+    @classmethod
+    def update(cls, db, device_id):
+        entry = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
+        print("Thing {} is alive".format(device_id))
+        if entry:
+            entry.last_seen = datetime.datetime.utcnow()
+            db.commit()
+        else:
+            entry = LastSeen()
+            entry.device_id = device_id
+            entry.last_seen = datetime.datetime.utcnow()
+            db.add(entry)
+            db.commit()
+
 
 class Thing(Base):
     __tablename__ = "thing"
