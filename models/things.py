@@ -71,7 +71,7 @@ class Shelly(Thing):
                                                                       vnode_id=self.vnode_id)
 
     def process_status(self, db, state):
-        last_state = self.last_state()
+        last_state = self.last_state(db)
         if last_state.value_bool != state.lower() in ["on", "yes", "true", "1"]:
             state = f"unknown,{state}"
             return super().process_status(db, state)
