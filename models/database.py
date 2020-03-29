@@ -113,6 +113,11 @@ class Thing(Base):
         things = query.all()
         return things
 
+    def to_dict(self):
+        return dict(id=self.id, name=self.name,
+                    type=self.type, device_id=self.device_id,
+                    vnode_id=self.vnode_id, visible=self.visible)
+
 
 class State(Base):
     __tablename__ = "state"
@@ -124,6 +129,11 @@ class State(Base):
     status_str = sa.Column(sa.String)
     status_bool = sa.Column(sa.Boolean)
     status_float = sa.Column(sa.Float)
+
+    def to_dict(self):
+        return dict(id=self.id, thing_id=self.thing_id, when=self.when,
+                    event_source=self.event_source, status_str=self.status_str,
+                    status_bool=self.status_bool, status_float=self.status_float)
 
 
 class Timer(Base):
