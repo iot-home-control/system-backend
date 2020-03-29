@@ -243,11 +243,17 @@ def shutdown(*args):
     logging.shutdown()
 
 
+def reload(*args):
+    mq.stop()
+    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+
+
 def main():
     global rule_executor
     global timer_checker
     global websocket
     signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGHUP, reload)
 
     print("Starting:", end=" ")
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
