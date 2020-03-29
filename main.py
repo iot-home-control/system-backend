@@ -19,6 +19,7 @@ import timer
 import websockets
 import asyncio
 import json
+from models.things import Switch
 
 logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
@@ -34,6 +35,7 @@ timer_checker = None
 websocket = None
 db_session_factory = None
 rule_queue = Queue()
+ws_queue = Queue()
 ws_event_loop = None
 connected_wss = set()
 
@@ -83,18 +85,64 @@ async def send_to_all(msg):
     await asyncio.wait([ws.send(msg) for ws in connected_wss])
 
 
+class JsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        return json.JSONEncoder.default(self, obj)
+
+
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
     connected_wss.add(websocket)
+    db = shared.db_session_factory()
+    time.sleep(0.2)
+
+    known_things = db.query(Thing).order_by(Thing.id).all()
+    msg = dict(type="things", things=[t.to_dict() for t in known_things])
+    await websocket.send(json.dumps(msg))
+
+    states = [s for s in (t.last_state(db) for t in known_things) if s]
+    msg = dict(type="states", states=[s.to_dict() for s in states])
+    await websocket.send(json.dumps(msg, cls=JsonEncoder))
+
+    views = {
+        "kueche": [10, 11, 13, 14],
+        "aussen": [9, 12]
+    }
+    msg = dict(type="views", views=views)
+    await websocket.send(json.dumps(msg))
+
     async for message in websocket:
         try:
             data = json.loads(message)
-            msg_type = data.get("type")
-            if msg_type:
-                if msg_type == "message":
-                    await send_to_all(json.dumps(data))
+            if isinstance(data, dict):
+                msg_type = data.get("type")
+                if msg_type:
+                    if msg_type == "message":
+                        await send_to_all(json.dumps(data))
+                    elif msg_type == "command":
+                        wslog.info("Command message: {}".format(message))
+                        thing_id = data.get("id")
+                        thing = db.query(Thing).get(thing_id)
+                        if not thing:
+                            wslog.warning("Thing {} is unknown".format(thing_id))
+                            continue
+                        if thing.type == 'switch':
+                            sw = db.query(Switch).get(thing_id)
+                            val = data.get("value")
+                            if val:
+                                sw.on()
+                            else:
+                                sw.off()
+                        else:
+                            wslog.warning("Unsupported type for command: '{}'".format(thing.type))
+                    else:
+                        wslog.warning("Unknown msg_type {}".format(msg_type))
+                else:
+                    wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
             else:
-                wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
+                wslog.warning("Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
         except json.JSONDecodeError as err:
             wslog.warning("Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
     else:
@@ -102,7 +150,7 @@ async def handle_ws_connection(websocket, path):
         connected_wss.remove(websocket)
 
 
-def ws_thread():
+def ws_thread(queue):
     wslog.info("Starting up")
     try:
         global ws_event_loop
@@ -164,6 +212,9 @@ def on_mqtt_message(client, userdata, message):
                 return
             print("Thing {} {} sent new state".format(thing.type, thing.name))
             res = thing.process_status(db, message.payload.decode("ascii"))
+
+            msg = dict(type="states", states=[db.query(State).get(res[2]).to_dict()])
+            asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder)), ws_event_loop)
             rule_queue.put(res)
         db.close()
     except Exception:
@@ -185,7 +236,6 @@ def shutdown(*args):
     print("Rule Execution", end=", ")
     timer_checker.join()
     print("Timer Checker", end=", ")
-    #ws_event_loop.call_soon_threadsafe(ws_shutdown)
     asyncio.run_coroutine_threadsafe(ws_shutdown(), ws_event_loop)
     websocket.join()
     print("WebSockets")
@@ -210,7 +260,7 @@ def main():
     timer_checker.start()
     print("Timer Checker", end=", ")
 
-    websocket = threading.Thread(target=ws_thread)
+    websocket = threading.Thread(target=ws_thread, args=(ws_queue,))
     websocket.start()
     print("WebSockets")
 
