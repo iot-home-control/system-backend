@@ -267,7 +267,7 @@ def main():
     rules.init_timers()
 
     try:
-        while True:
+        while not request_shutdown:
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass
