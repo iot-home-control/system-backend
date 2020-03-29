@@ -27,7 +27,6 @@ rulelog = logging.getLogger("rule")
 timerlog = logging.getLogger("timer")
 wslog = logging.getLogger("websocket")
 
-
 request_shutdown = False
 did_shutdown = False
 rule_executor = None
@@ -128,8 +127,8 @@ async def handle_ws_connection(websocket, path):
                         if not thing:
                             wslog.warning("Thing {} is unknown".format(thing_id))
                             continue
-                        if thing.type == 'switch':
-                            sw = db.query(Switch).get(thing_id)
+                        if thing.type in ['switch', 'shelly']:
+                            sw = db.query(Thing).get(thing_id)
                             val = data.get("value")
                             if val:
                                 sw.on()
