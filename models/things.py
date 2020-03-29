@@ -53,13 +53,10 @@ class Button(Thing):
         return DataType.Boolean
 
 
-class Shelly(Thing):
+class Shelly(Switch):
     __mapper_args__ = {
         'polymorphic_identity': 'shelly'
     }
-
-    def get_data_type(self):
-        return DataType.Boolean
 
     def get_state_topic(self):
         return "shellies/{device_id}/relay/{vnode_id}".format(type=self.type, device_id=self.device_id,
