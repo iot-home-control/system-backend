@@ -1,4 +1,5 @@
 paho-mqtt==1.4.*
-psycopg2-binary==2.7.*
+psycopg2-binary==2.8.*
 SQLAlchemy==1.2.*
 websockets==7.0
+alembic

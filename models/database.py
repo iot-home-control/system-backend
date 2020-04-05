@@ -12,26 +12,6 @@ class DataType(Enum):
     Boolean = 3
 
 
-class LastSeen(Base):
-    __tablename__ = "last_seen"
-    device_id = sa.Column(sa.String, primary_key=True)
-    last_seen = sa.Column(sa.DateTime)
-
-    @classmethod
-    def update(cls, db, device_id):
-        entry = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
-        print("Thing {} is alive".format(device_id))
-        if entry:
-            entry.last_seen = datetime.datetime.utcnow()
-            db.commit()
-        else:
-            entry = LastSeen()
-            entry.device_id = device_id
-            entry.last_seen = datetime.datetime.utcnow()
-            db.add(entry)
-            db.commit()
-
-
 class Thing(Base):
     __tablename__ = "thing"
     id = sa.Column(sa.Integer, primary_key=True)
@@ -40,6 +20,7 @@ class Thing(Base):
     device_id = sa.Column(sa.String)
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
+    last_seen = sa.Column(sa.DateTime(timezone=True))
 
     __mapper_args__ = {
         'polymorphic_on': type,
@@ -113,6 +94,17 @@ class Thing(Base):
         things = query.all()
         return things
 
+    @classmethod
+    def update_last_seen(cls, db, device_id):
+        print("Thing {} is alive".format(device_id), end="")
+        thing = db.query(Thing).filter_by(device_id=device_id).one_or_none()
+        if not thing:
+            print(" but we don't know it...")
+            return
+        print()
+        thing.last_seen = datetime.datetime.now(tz=datetime.timezone.utc)
+        db.commit()
+
     def to_dict(self):
         return dict(id=self.id, name=self.name,
                     type=self.type, device_id=self.device_id,
@@ -142,3 +134,17 @@ class Timer(Base):
     schedule = sa.Column(sa.DateTime, nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
     data = sa.Column(sa.JSON, nullable=False, default=lambda: {})
+
+
+class ThingView(Base):
+    __tablename__ = "thing_view"
+    thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'), primary_key=True)
+    view_id = sa.Column(sa.Integer, sa.ForeignKey('view.id'), primary_key=True)
+
+
+class View(Base):
+    __tablename__ = "view"
+    id = sa.Column(sa.Integer, primary_key=True)
+    name = sa.Column(sa.String, nullable=False)
+
+    things = sa.orm.relationship("Thing", secondary="thing_view")

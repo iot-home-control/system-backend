@@ -4,8 +4,7 @@ import mq
 import paho.mqtt.client as mqttm
 from pprint import pprint
 import shared
-from models.database import Thing, State, LastSeen
-from models.things import Shelly
+from models.database import Thing, State, View
 import logging
 import signal
 import threading
@@ -105,14 +104,15 @@ async def handle_ws_connection(websocket, path):
     msg = dict(type="states", states=[s.to_dict() for s in states])
     await websocket.send(json.dumps(msg, cls=JsonEncoder))
 
-    views = {
-        "kueche": [10, 11, 13, 14],
-        "aussen": [9, 12]
-    }
+    views_query = db.query(View).order_by(View.name, View.id).all()
+    views = dict(All=[thing.id for thing in known_things])
+    views.update({view.name: [thing.id for thing in view.things] for view in views_query})
     msg = dict(type="views", views=views)
     await websocket.send(json.dumps(msg))
+    db.close()
 
     async for message in websocket:
+        db = shared.db_session_factory()
         try:
             data = json.loads(message)
             if isinstance(data, dict):
@@ -136,6 +136,11 @@ async def handle_ws_connection(websocket, path):
                                 sw.off()
                         else:
                             wslog.warning("Unsupported type for command: '{}'".format(thing.type))
+                    elif msg_type == "last_seen":
+                        things = db.query(Thing).all()
+                        last_seen = {thing.id: thing.last_seen.isoformat() if thing.last_seen else None for thing in things}
+                        msg = dict(type="last_seen", last_seen=last_seen)
+                        await websocket.send(json.dumps(msg))
                     else:
                         wslog.warning("Unknown msg_type {}".format(msg_type))
                 else:
@@ -144,9 +149,11 @@ async def handle_ws_connection(websocket, path):
                 wslog.warning("Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
         except json.JSONDecodeError as err:
             wslog.warning("Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
+        db.close()
     else:
         wslog.info("Client {} disconnected".format(websocket.remote_address))
         connected_wss.remove(websocket)
+        db.close()
 
 
 def ws_thread(queue):
@@ -198,7 +205,7 @@ def on_mqtt_message(client, userdata, message):
         db = shared.db_session_factory()
         if message.topic.startswith("/alive"):
             device_id = message.payload.decode("ascii")
-            LastSeen.update(db, device_id)
+            Thing.update_last_seen(db, device_id)
         else:
             start, node_type, vnode, stop = message.topic.split("/", maxsplit=4)
             if start == "shellies":
