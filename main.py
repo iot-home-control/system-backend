@@ -96,7 +96,7 @@ async def handle_ws_connection(websocket, path):
     db = shared.db_session_factory()
     time.sleep(0.2)
 
-    known_things = db.query(Thing).order_by(Thing.id).all()
+    known_things = db.query(Thing).filter_by(visible=True).order_by(Thing.id).all()
     msg = dict(type="things", things=[t.to_dict() for t in known_things])
     await websocket.send(json.dumps(msg))
 
