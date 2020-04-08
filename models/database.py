@@ -12,6 +12,22 @@ class DataType(Enum):
     Boolean = 3
 
 
+class LastSeen(Base):
+    __tablename__ = "last_seen"
+    device_id = sa.Column(sa.String, primary_key=True)
+    last_seen = sa.Column(sa.DateTime(timezone=True))
+
+    @classmethod
+    def update_last_seen(cls, db, device_id):
+        print("Thing {} is alive".format(device_id))
+        thing = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
+        if not thing:
+            thing = LastSeen(device_id=device_id)
+            db.add(thing)
+        thing.last_seen = datetime.datetime.now(tz=datetime.timezone.utc)
+        db.commit()
+
+
 class Thing(Base):
     __tablename__ = "thing"
     id = sa.Column(sa.Integer, primary_key=True)
@@ -20,7 +36,7 @@ class Thing(Base):
     device_id = sa.Column(sa.String)
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
-    last_seen = sa.Column(sa.DateTime(timezone=True))
+    last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id))
 
     __mapper_args__ = {
         'polymorphic_on': type,
@@ -28,7 +44,11 @@ class Thing(Base):
     }
 
     def __repr__(self):
-        return 'Thing(id={}, name="{}", type="{}", device_id="{}", vnode_id={}, visible={})'.format(self.id, self.name, self.type, self.device_id, self.vnode_id, self.visible)
+        return 'Thing(id={}, name="{}", type="{}", device_id="{}", vnode_id={}, visible={})'.format(self.id, self.name,
+                                                                                                    self.type,
+                                                                                                    self.device_id,
+                                                                                                    self.vnode_id,
+                                                                                                    self.visible)
 
     def last_state(self, db):
         return db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
@@ -93,17 +113,6 @@ class Thing(Base):
             query = query.filter(Thing.vnode_id == vnode_id)
         things = query.all()
         return things
-
-    @classmethod
-    def update_last_seen(cls, db, device_id):
-        print("Thing {} is alive".format(device_id), end="")
-        thing = db.query(Thing).filter_by(device_id=device_id).one_or_none()
-        if not thing:
-            print(" but we don't know it...")
-            return
-        print()
-        thing.last_seen = datetime.datetime.now(tz=datetime.timezone.utc)
-        db.commit()
 
     def to_dict(self):
         return dict(id=self.id, name=self.name,

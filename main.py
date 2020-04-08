@@ -4,7 +4,7 @@ import mq
 import paho.mqtt.client as mqttm
 from pprint import pprint
 import shared
-from models.database import Thing, State, View
+from models.database import Thing, State, View, LastSeen
 import logging
 import signal
 import threading
@@ -205,7 +205,7 @@ def on_mqtt_message(client, userdata, message):
         db = shared.db_session_factory()
         if message.topic.startswith("/alive"):
             device_id = message.payload.decode("ascii")
-            Thing.update_last_seen(db, device_id)
+            LastSeen.update_last_seen(db, device_id)
         else:
             start, node_type, vnode, stop = message.topic.split("/", maxsplit=4)
             if start == "shellies":
