@@ -20,6 +20,15 @@ class HumiditySensor(Thing):
         return DataType.Float
 
 
+class SoilHumiditySensor(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'soil-humidity'
+    }
+
+    def get_data_type(self):
+        return DataType.Int
+
+
 class LEDs(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'leds'
@@ -79,6 +88,7 @@ thing_type_table = {
     "switch": Switch,
     "temperature": TemperatureSensor,
     "humidity": HumiditySensor,
+    "soil-humidity": SoilHumiditySensor,
     "leds": LEDs,
     "button": Button,
     "shelly": Shelly,
