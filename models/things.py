@@ -22,7 +22,7 @@ class HumiditySensor(Thing):
 
 class SoilMoistureSensor(Thing):
     __mapper_args__ = {
-        'polymorphic_identity': 'soil-moisture'
+        'polymorphic_identity': 'soilmoisture'
     }
 
     def get_data_type(self):
@@ -88,7 +88,7 @@ thing_type_table = {
     "switch": Switch,
     "temperature": TemperatureSensor,
     "humidity": HumiditySensor,
-    "soil-moisture": SoilMoistureSensor,
+    "soilmoisture": SoilMoistureSensor,
     "leds": LEDs,
     "button": Button,
     "shelly": Shelly,
