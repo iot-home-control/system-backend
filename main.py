@@ -18,7 +18,7 @@ import timer
 import websockets
 import asyncio
 import json
-from models.things import Switch
+from typing import Optional
 
 logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
@@ -28,13 +28,13 @@ wslog = logging.getLogger("websocket")
 
 request_shutdown = False
 did_shutdown = False
-rule_executor = None
-timer_checker = None
-websocket = None
+rule_executor: Optional[threading.Thread] = None
+timer_checker: Optional[threading.Thread] = None
+websocket: Optional[threading.Thread] = None
 db_session_factory = None
 rule_queue = Queue()
 ws_queue = Queue()
-ws_event_loop = None
+ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
 
 

@@ -1,6 +1,8 @@
 import paho.mqtt.client as mqttm
+from typing import Optional
 
-_mqtt = None
+_mqtt: Optional[mqttm.Client] = None
+
 
 def start(config, on_connect, on_disconnect, on_message):
     global _mqtt
