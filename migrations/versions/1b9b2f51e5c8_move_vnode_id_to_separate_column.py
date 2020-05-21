@@ -8,8 +8,7 @@ Create Date: 2017-06-11 17:55:10.549849
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
-from models.database import Thing
-Session = sessionmaker()
+from sqlalchemy.ext.declarative import declarative_base
 
 # revision identifiers, used by Alembic.
 revision = '1b9b2f51e5c8'
@@ -17,6 +16,15 @@ down_revision = 'c6eafb0dad45'
 branch_labels = None
 depends_on = None
 Session = sessionmaker()
+Base = declarative_base()
+
+
+class Thing(Base):
+    __tablename__ = "thing"
+    id = sa.Column(sa.Integer, primary_key=True)
+    device_id = sa.Column(sa.String)
+    vnode_id = sa.Column(sa.Integer, default=0)
+
 
 def upgrade():
     op.add_column('thing', sa.Column('vnode_id', sa.Integer(), nullable=True))
