@@ -2,14 +2,12 @@
 
 import mq
 import paho.mqtt.client as mqttm
-from pprint import pprint
 import shared
 from models.database import Thing, State, View, LastSeen
 import logging
 import signal
 import threading
 import time
-import os
 import config
 import datetime
 from queue import Queue, Empty
@@ -228,7 +226,7 @@ def on_mqtt_message(client, userdata, message):
         mqttlog.exception("Uncaught exception in on_mqtt_message")
 
 
-def shutdown(*args):
+def shutdown():
     global did_shutdown
     global request_shutdown
     if did_shutdown:
@@ -249,17 +247,27 @@ def shutdown(*args):
     logging.shutdown()
 
 
-def reload(*args):
+# noinspection PyUnusedLocal
+def shutdown_sig(sig, frame):
+    shutdown()
+
+
+def reload():
     mq.stop()
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+
+
+# noinspection PyUnusedLocal
+def reload_sig(sig, frame):
+    reload()
 
 
 def main():
     global rule_executor
     global timer_checker
     global websocket
-    signal.signal(signal.SIGTERM, shutdown)
-    signal.signal(signal.SIGHUP, reload)
+    signal.signal(signal.SIGTERM, shutdown_sig)
+    signal.signal(signal.SIGHUP, reload_sig)
 
     print("Starting:", end=" ")
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)

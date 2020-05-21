@@ -15,9 +15,11 @@ def start(config, on_connect, on_disconnect, on_message):
     _mqtt.connect_async(config.MQTT_HOST)
     _mqtt.loop_start()
 
+
 def stop():
     _mqtt.disconnect()
     _mqtt.loop_stop()
+
 
 def publish(topic, payload):
     return _mqtt.publish(topic, payload)

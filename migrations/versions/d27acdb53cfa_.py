@@ -26,8 +26,8 @@ def upgrade():
     op.create_table('thing_view',
     sa.Column('thing_id', sa.Integer(), nullable=True),
     sa.Column('view_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['thing_id'], ['thing.id'], ),
-    sa.ForeignKeyConstraint(['view_id'], ['view.id'], ),
+    sa.ForeignKeyConstraint(('thing_id', ), ['thing.id'], ),
+    sa.ForeignKeyConstraint(('view_id', ), ['view.id'], ),
     sa.PrimaryKeyConstraint('thing_id', 'view_id')
     )
     # ### end Alembic commands ###

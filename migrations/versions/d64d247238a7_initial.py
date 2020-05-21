@@ -31,7 +31,7 @@ def upgrade():
     sa.Column('when', sa.DateTime(), nullable=True),
     sa.Column('event_source', sa.String(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
-    sa.ForeignKeyConstraint(['thing_id'], ['thing.id'], ),
+    sa.ForeignKeyConstraint(('thing_id', ), ['thing.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     # ### end Alembic commands ###

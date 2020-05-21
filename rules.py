@@ -1,4 +1,3 @@
-from pprint import pprint
 import models.database
 import timer
 import datetime
