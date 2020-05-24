@@ -36,7 +36,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
             db = db_session_factory()
-            resp = [{"text": t.name, "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
+            resp = [{"text": t.name + " (" + t.type.capitalize() + ")", "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
             db.close()
         elif self.path == _prefix + "/query":
             targets = [t["target"] for t in req["targets"] if t.get("type") == "timeseries"]
