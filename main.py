@@ -292,7 +292,7 @@ def main():
     websocket.start()
     print("WebSockets", end=", ")
 
-    grafana.start(prefix="/grafana")
+    grafana.start(bind_addr=config.BIND_IP, prefix="/grafana")
     print("Grafana API")
 
     rules.init_timers()
