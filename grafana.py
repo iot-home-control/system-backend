@@ -52,6 +52,7 @@ class Handler(BaseHTTPRequestHandler):
                 thing = db.query(Thing).get(target)
                 if not thing:
                     continue
+                display_name = thing.name + " (" + thing.type.capitalize() + ")"
                 datatype = thing.get_data_type()
                 datapoints = []
                 states = db.query(State).filter(State.when.between(range_start, range_stop), State.thing_id == thing.id).order_by(State.when)
@@ -62,7 +63,7 @@ class Handler(BaseHTTPRequestHandler):
                         datapoints.append([state.status_float, when])
                     elif datatype == DataType.Boolean:
                         datapoints.append([state.status_bool, when])
-                resp.append(dict(target=thing.name, datapoints=datapoints))
+                resp.append(dict(target=display_name, datapoints=datapoints))
             db.close()
 
             self.send_response(200)
