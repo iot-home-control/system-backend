@@ -5,6 +5,8 @@ from models.database import Thing, State, DataType
 from shared import db_session_factory
 import json
 import dateutil.parser
+from urllib.parse import urlparse, parse_qs
+import os
 
 _server: Optional[ThreadingHTTPServer] = None
 _prefix: Optional[str] = ""
@@ -16,6 +18,24 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == _prefix + "/":
             self.send_response(200)
             self.end_headers()
+        elif self.path.startswith("/api/v1/config"):
+            params = parse_qs(urlparse(self.path).query)
+            device_id = params.get("device", [None])[0]
+            if device_id:
+                filename = os.path.join("../config/" + device_id + ".json")
+                if os.path.exists(filename):
+                    with open(filename, "rb") as f:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(f.read())
+                        return
+
+            self.send_error(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({}).encode())
+
         else:
             self.send_error(400)
             self.end_headers()
