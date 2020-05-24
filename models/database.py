@@ -70,7 +70,7 @@ class Thing(Base):
 
         state = State()
         state.thing_id = self.id
-        state.when = datetime.datetime.utcnow()
+        state.when = datetime.datetime.now(tz=datetime.timezone.utc)
         state.event_source = reason
         data_type = self.get_data_type()
         if data_type == DataType.Float:
@@ -126,7 +126,7 @@ class State(Base):
     id = sa.Column(sa.Integer, primary_key=True)
     thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'))
     thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
-    when = sa.Column(sa.DateTime)
+    when = sa.Column(sa.DateTime(timezone=True))
     event_source = sa.Column(sa.String)
     status_str = sa.Column(sa.String)
     status_bool = sa.Column(sa.Boolean)
@@ -141,7 +141,7 @@ class State(Base):
 class Timer(Base):
     __tablename__ = "timer"
     id = sa.Column(sa.String, primary_key=True)
-    schedule = sa.Column(sa.DateTime, nullable=False)
+    schedule = sa.Column(sa.DateTime(timezone=True), nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
     data = sa.Column(sa.JSON, nullable=False, default=lambda: {})
 

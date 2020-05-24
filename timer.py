@@ -36,7 +36,7 @@ def add_timer(timer_id, func, at=None, interval=None):
             timer.schedule = at
         elif interval:
             assert type(interval) == datetime.timedelta, "'at' must be timedelta"
-            timer.schedule = datetime.datetime.utcnow() + interval
+            timer.schedule = datetime.datetime.now(tz=datetime.timezone.utc) + interval
             timer.data["__interval__"] = interval.total_seconds()
         else:
             raise RuntimeError("Timer is neither at nor interval")
@@ -58,7 +58,7 @@ def add_timer(timer_id, func, at=None, interval=None):
 
 def process_timers():
     db = shared.db_session_factory()
-    todo = db.query(Timer).filter(Timer.schedule < datetime.datetime.utcnow()).all()
+    todo = db.query(Timer).filter(Timer.schedule < datetime.datetime.now(tz=datetime.timezone.utc)).all()
     for timer in todo:
         if timer.function_id not in _functions:
             logger.warning("Timer '{}' has specifies function_id '{}' which is unknown".format(timer.id, timer.function_id))
