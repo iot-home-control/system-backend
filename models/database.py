@@ -122,6 +122,7 @@ class Thing(Base):
 
 class State(Base):
     __tablename__ = "state"
+    __table_args__ = (sa.Index("ix_state_id_when", "id", "when"), )
     id = sa.Column(sa.Integer, primary_key=True)
     thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'))
     thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))

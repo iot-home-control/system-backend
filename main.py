@@ -16,6 +16,7 @@ import timer
 import websockets
 import asyncio
 import json
+import grafana
 from typing import Optional
 
 logging.basicConfig(level=logging.DEBUG)
@@ -239,11 +240,17 @@ def shutdown():
     request_shutdown = True
     rule_executor.join()
     print("Rule Execution", end=", ")
+
     timer_checker.join()
     print("Timer Checker", end=", ")
+
     asyncio.run_coroutine_threadsafe(ws_shutdown(), ws_event_loop)
     websocket.join()
-    print("WebSockets")
+    print("WebSockets", end=", ")
+
+    grafana.stop()
+    print("Grafana API")
+
     logging.shutdown()
 
 
@@ -283,7 +290,10 @@ def main():
 
     websocket = threading.Thread(target=ws_thread, args=(ws_queue,))
     websocket.start()
-    print("WebSockets")
+    print("WebSockets", end=", ")
+
+    grafana.start(prefix="/grafana")
+    print("Grafana API")
 
     rules.init_timers()
 
