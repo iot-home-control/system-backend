@@ -101,4 +101,5 @@ thing_type_table = {
     "leds": LEDs,
     "button": Button,
     "shelly": Shelly,
+    "pressure": PressureSensor,
 }
