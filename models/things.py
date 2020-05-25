@@ -20,6 +20,15 @@ class HumiditySensor(Thing):
         return DataType.Float
 
 
+class PressureSensor(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'pressure'
+    }
+
+    def get_data_type(self):
+        return DataType.Float
+
+
 class SoilMoistureSensor(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'soilmoisture'
