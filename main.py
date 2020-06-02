@@ -24,6 +24,7 @@ mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
 timerlog = logging.getLogger("timer")
 wslog = logging.getLogger("websocket")
+mqttlog.setLevel(logging.INFO)
 
 request_shutdown = False
 did_shutdown = False
