@@ -1,12 +1,17 @@
 import models.database
 import timer
 import datetime
+import shared
 from enum import Enum
-
 
 all_rules = {}
 triggers = {}
 rule_inits = []
+
+try:
+    import local_rules
+except ImportError:
+    pass
 
 
 def init(db):
@@ -50,27 +55,17 @@ def rule(name, *trigger, **params):
                 for t in wrapper.resolve(db):
                     triggers.setdefault(t.id, []).append(decorator)
             all_rules[decorator] = name
+
         rule_inits.append(init)
         return decorator
+
     return wrapper
 
 
 def init_timers():
-    timer.add_timer("Test Timer", timer_test_rule, interval=datetime.timedelta(seconds=10))
-
-
-@rule("Test", Thing("switch", name="Deckenlicht"))
-def test_rule(event):
-    thing, state = event.thing, event.state
-    if state.event_source != "local":
-        return
-    if state.status_bool:
-        thing.off()
-    else:
-        thing.on()
-
-
-@rule("Timer_test")
-def timer_test_rule(event):
-    source, thing, state = event.source, event.thing, event.state
-    # print(source, thing, state)
+    try:
+        local_rules.init_timers()
+    except NameError:  # no module
+        pass
+    except AttributeError:  # no function
+        pass
