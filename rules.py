@@ -8,11 +8,6 @@ all_rules = {}
 triggers = {}
 rule_inits = []
 
-try:
-    import local_rules
-except ImportError:
-    pass
-
 
 def init(db):
     for func in rule_inits:
@@ -63,9 +58,4 @@ def rule(name, *trigger, **params):
 
 
 def init_timers():
-    try:
-        local_rules.init_timers()
-    except NameError:  # no module
-        pass
-    except AttributeError:  # no function
-        pass
+   pass

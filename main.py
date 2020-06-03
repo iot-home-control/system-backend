@@ -20,6 +20,11 @@ import json
 import grafana
 from typing import Optional
 
+try:
+    import local_rules
+except ModuleNotFoundError:
+    pass
+
 logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
@@ -298,6 +303,13 @@ def main():
     print("Grafana API")
 
     rules.init_timers()
+    # local timers
+    try:
+        local_rules.init_timers()
+    except NameError:  # no module
+        pass
+    except AttributeError:  # no function
+        pass
 
     try:
         while not request_shutdown:
