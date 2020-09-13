@@ -4,3 +4,4 @@ config.py
 .idea/
 .directory
 venv/
+local_rules.py
