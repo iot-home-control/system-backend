@@ -159,3 +159,8 @@ class View(Base):
     name = sa.Column(sa.String, nullable=False)
 
     things = sa.orm.relationship("Thing", secondary="thing_view")
+
+class RuleState(Base):
+    __tablename__ = "rule_state"
+    id = sa.Column(sa.String, primary_key=True)
+    enabled = sa.Column(sa.Boolean, default=True)

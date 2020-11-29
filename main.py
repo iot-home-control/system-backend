@@ -3,7 +3,7 @@
 import mq
 import paho.mqtt.client as mqttm
 import shared
-from models.database import Thing, State, View, LastSeen
+from models.database import Thing, State, View, LastSeen, RuleState
 import logging
 import signal
 import threading
@@ -58,6 +58,9 @@ def rule_executer_thread(queue):
             thing_id, thing_class, state_id = event
             for rule in rules.triggers.get(thing_id, []):
                 db = shared.db_session_factory()
+                rulestate = db.query(RuleState).get(rules.all_rules[rule])
+                if rulestate and not rulestate.enabled:
+                    continue
                 try:
                     revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id), db.query(State).get(state_id))
                     rule(revent)
