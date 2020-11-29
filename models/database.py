@@ -1,5 +1,6 @@
 import sqlalchemy as sa
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.mutable import MutableDict
 from enum import Enum
 import datetime
 
@@ -143,7 +144,7 @@ class Timer(Base):
     id = sa.Column(sa.String, primary_key=True)
     schedule = sa.Column(sa.DateTime(timezone=True), nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
-    data = sa.Column(sa.JSON, nullable=False, default=lambda: {})
+    data = sa.Column(MutableDict.as_mutable(sa.JSON), nullable=False, default=lambda: {})
 
 
 class ThingView(Base):

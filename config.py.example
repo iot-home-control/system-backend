@@ -6,3 +6,5 @@ MQTT_USER = "username"
 MQTT_PASS = "password"
 
 BIND_IP = "127.0.0.1"
+
+TIMEZONE="UTC"
