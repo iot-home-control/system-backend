@@ -230,10 +230,10 @@ def on_mqtt_message(client, userdata, message):
             device_id = message.payload.decode("ascii")
             LastSeen.update_last_seen(db, device_id)
         else:
-            node_type, vnode, stop = message.topic.split("/", maxsplit=3)
+            node_type, vnode, stop = message.topic.split("/", maxsplit=2)
             if node_type == "shellies":
-                device_id = node_type
-                vnode_id = stop
+                device_id = vnode
+                vnode_id = stop.split("/")[-1]
                 node_type = "shelly"
                 # if vnode.startswith("shellybutton1"):
                 #     node_type = "shellybutton"
