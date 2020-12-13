@@ -55,10 +55,10 @@ class Thing(Base):
         return db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
 
     def get_state_topic(self):
-        return "/{type}/{device_id}/state".format(type=self.type, device_id=self.get_full_name())
+        return "{type}/{device_id}/state".format(type=self.type, device_id=self.get_full_name())
 
     def get_action_topic(self):
-        return "/{type}/{device_id}/action".format(type=self.type, device_id=self.get_full_name())
+        return "{type}/{device_id}/action".format(type=self.type, device_id=self.get_full_name())
 
     def get_full_name(self):
         return "{}-{}".format(self.device_id, self.vnode_id)
