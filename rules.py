@@ -34,8 +34,9 @@ class RuleEvent:
 
 
 class EventSource(Enum):
-    Timer = 1
-    Trigger = 2
+    Timer = 1  # when a timer timed out
+    Trigger = 2  # when status of a thing has changed
+    Event = 3  # when something else happend (e.g. scene button in web interface, shelly button)
 
 
 def rule(name, *trigger, **params):

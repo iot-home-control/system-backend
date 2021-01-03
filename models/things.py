@@ -1,4 +1,5 @@
 import mq
+import json
 from models.database import Thing, DataType, LastSeen
 
 
@@ -90,7 +91,31 @@ class Shelly(Switch):
         if last_state is None or last_state.status_bool != (state.lower() in ["on", "yes", "true", "1"]):
             state = f"unknown,{state}"
             return super().process_status(db, state)
-        return self.id, type(self), last_state.id
+        return self.id, type(self), "state", last_state.id
+
+
+class ShellyButton(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shellybutton'
+    }
+
+    def get_data_type(self):
+        return DataType.Nothing
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/input_event/{vnode_id}".format(type=self.type, device_id=self.device_id,
+                                                                    vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state):
+        try:
+            data = json.loads(state)
+        except json.JSONDecodeError:
+            ...
+        event = data.get("event") # S, SS, SSS, L
+        return self.id, type(self), "event", event
 
 
 thing_type_table = {
@@ -102,4 +127,5 @@ thing_type_table = {
     "button": Button,
     "shelly": Shelly,
     "pressure": PressureSensor,
+    "shellybutton": ShellyButton,
 }

@@ -55,14 +55,20 @@ def rule_executer_thread(queue):
             if not event:
                 rulelog.error("event in queue is None")
                 continue
-            thing_id, thing_class, state_id = event
+            thing_id, thing_class, kind, data = event
             for rule in rules.triggers.get(thing_id, []):
                 db = shared.db_session_factory()
                 rulestate = db.query(RuleState).get(rules.all_rules[rule])
                 if rulestate and not rulestate.enabled:
                     continue
                 try:
-                    revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id), db.query(State).get(state_id))
+                    if kind == "state":
+                        revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id), db.query(State).get(data))
+                    elif kind == "event":
+                        revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
+                    else:
+                        rulelog.error(f"Unsupported rule event kind: {kind}")
+                        break
                     rule(revent)
                     db.commit()
                 except Exception:
@@ -192,7 +198,7 @@ def ws_thread(queue):
         wslog.info("Shutting down")
     except Exception:
         wslog.exception("Uncaught Exception in ws_thread")
-        
+
 
 async def ws_shutdown():
     if connected_wss:
@@ -235,8 +241,8 @@ def on_mqtt_message(client, userdata, message):
                 device_id = vnode
                 vnode_id = stop.split("/")[-1]
                 node_type = "shelly"
-                # if vnode.startswith("shellybutton1"):
-                #     node_type = "shellybutton"
+                if vnode.startswith("shellybutton1"):
+                    node_type = "shellybutton"
             else:
                 device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
             thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
@@ -244,10 +250,14 @@ def on_mqtt_message(client, userdata, message):
                 return
             print("Thing {} {} sent new state".format(thing.type, thing.name))
             res = thing.process_status(db, message.payload.decode("ascii"))
-
-            msg = dict(type="states", states=[db.query(State).get(res[2]).to_dict()])
-            asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder)), ws_event_loop)
-            rule_queue.put(res)
+            if res[2] == "state":
+                msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
+                asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder)), ws_event_loop)
+                rule_queue.put(res)
+            elif res[2] == "event":
+                rule_queue.put(res)
+            else:
+                mqttlog.error(f"Malformed process_status response '{res}'")
         db.close()
     except Exception:
         mqttlog.exception("Uncaught exception in on_mqtt_message")

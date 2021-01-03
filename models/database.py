@@ -8,6 +8,7 @@ Base = declarative_base()
 
 
 class DataType(Enum):
+    Nothing = 0
     Float = 1
     String = 2
     Boolean = 3
@@ -80,12 +81,14 @@ class Thing(Base):
             state.status_bool = value.lower() in ["on", "yes", "true", "1"]
         elif data_type == DataType.String:
             state.status_str = value
+        elif data_type == DataType.Nothing:
+            return self.id, type(self), "state", None
         else:
             raise RuntimeError("Unknown data type")
 
         db.add(state)
         db.commit()
-        return self.id, type(self), state.id
+        return self.id, type(self), "state", state.id
 
     @staticmethod
     def get_by_type_and_device_id(db, node_type, device_id, vnode_id):
