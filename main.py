@@ -112,6 +112,30 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+async def ws_type_command(db, websocket, data):
+    thing_id = data.get("id")
+    thing = db.query(Thing).get(thing_id)
+    if not thing:
+        wslog.warning("Thing {} is unknown".format(thing_id))
+        return
+    if thing.type in ['switch', 'shelly']:
+        sw = db.query(Thing).get(thing_id)
+        val = data.get("value")
+        if val:
+            sw.on()
+        else:
+            sw.off()
+    else:
+        wslog.warning("Unsupported type for command: '{}'".format(thing.type))
+
+
+async def ws_type_last_seen(db, websocket, data):
+    things = db.query(Thing).all()
+    last_seen = {thing.id: thing.last_seen.isoformat() if thing.last_seen else None for thing in things}
+    msg = dict(type="last_seen", last_seen=last_seen)
+    await websocket.send(json.dumps(msg))
+
+
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
     connected_wss.add(websocket)
@@ -144,26 +168,10 @@ async def handle_ws_connection(websocket, path):
                         if msg_type == "message":
                             await send_to_all(json.dumps(data))
                         elif msg_type == "command":
-                            wslog.info("Command message: {}".format(message))
-                            thing_id = data.get("id")
-                            thing = db.query(Thing).get(thing_id)
-                            if not thing:
-                                wslog.warning("Thing {} is unknown".format(thing_id))
-                                continue
-                            if thing.type in ['switch', 'shelly']:
-                                sw = db.query(Thing).get(thing_id)
-                                val = data.get("value")
-                                if val:
-                                    sw.on()
-                                else:
-                                    sw.off()
-                            else:
-                                wslog.warning("Unsupported type for command: '{}'".format(thing.type))
+                            # wslog.info("Command message: {}".format(message))
+                            await ws_type_command(db, websocket, data)
                         elif msg_type == "last_seen":
-                            things = db.query(Thing).all()
-                            last_seen = {thing.id: thing.last_seen.isoformat() if thing.last_seen else None for thing in things}
-                            msg = dict(type="last_seen", last_seen=last_seen)
-                            await websocket.send(json.dumps(msg))
+                            await ws_type_last_seen(db, websocket, data)
                         else:
                             wslog.warning("Unknown msg_type {}".format(msg_type))
                     else:
