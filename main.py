@@ -3,7 +3,7 @@
 import mq
 import paho.mqtt.client as mqttm
 import shared
-from models.database import Thing, State, View, LastSeen, RuleState
+from models.database import Thing, State, View, LastSeen, RuleState, ThingView
 import logging
 import signal
 import threading
@@ -136,6 +136,32 @@ async def ws_type_last_seen(db, websocket, data):
     await websocket.send(json.dumps(msg))
 
 
+async def ws_type_create_or_edit(db, websocket, data):
+    thing_id = data.get("id")
+    thing = db.query(Thing).get(thing_id) if thing_id else None
+
+    data = dict(id=None,
+                views=[dict(value=v.id, text=v.name) for v in db.query(View).order_by(View.name, View.id).all()],
+                types=[dict(value=k, text=cls.display_name()) for k, cls in sorted(models.things.thing_type_table.items()) if cls.display_name()],
+                thing_views=[],
+                thing_type=None,
+                visible=True,
+                name='',
+                device_id='',
+                vnode=0
+                )
+
+    if thing: # Edit
+        data['id'] = thing.id
+        data['thing_views'] = [view.id for view in thing.views.all()]
+        data['thing_type'] = thing.type
+        data['name'] = thing.name
+        data['device_id'] = thing.device_id
+        data['vnode'] = thing.vnode_id
+        data['visible'] = thing.visible
+
+    await websocket.send(json.dumps(dict(type="edit_data", data=data)))
+
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
     connected_wss.add(websocket)
@@ -172,6 +198,9 @@ async def handle_ws_connection(websocket, path):
                             await ws_type_command(db, websocket, data)
                         elif msg_type == "last_seen":
                             await ws_type_last_seen(db, websocket, data)
+                        elif msg_type == "create_or_edit":
+                            wslog.info("create_or_edit")
+                            await ws_type_create_or_edit(db, websocket, data)
                         else:
                             wslog.warning("Unknown msg_type {}".format(msg_type))
                     else:

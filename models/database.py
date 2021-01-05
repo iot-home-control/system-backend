@@ -39,6 +39,7 @@ class Thing(Base):
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
     last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id))
+    views =  sa.orm.relationship("View", secondary="thing_view", lazy="dynamic")
 
     __mapper_args__ = {
         'polymorphic_on': type,
@@ -122,6 +123,10 @@ class Thing(Base):
         return dict(id=self.id, name=self.name,
                     type=self.type, device_id=self.device_id,
                     vnode_id=self.vnode_id, visible=self.visible)
+
+    @classmethod
+    def display_name(cls):
+        return "<undefined>"
 
 
 class State(Base):

@@ -11,6 +11,10 @@ class TemperatureSensor(Thing):
     def get_data_type(self):
         return DataType.Float
 
+    @classmethod
+    def display_name(cls):
+        return 'Temperature Sensor'
+
 
 class HumiditySensor(Thing):
     __mapper_args__ = {
@@ -19,6 +23,10 @@ class HumiditySensor(Thing):
 
     def get_data_type(self):
         return DataType.Float
+
+    @classmethod
+    def display_name(cls):
+        return 'Humidity Sensor'
 
 
 class PressureSensor(Thing):
@@ -29,6 +37,10 @@ class PressureSensor(Thing):
     def get_data_type(self):
         return DataType.Float
 
+    @classmethod
+    def display_name(cls):
+        return 'Pressure Sensor'
+
 
 class SoilMoistureSensor(Thing):
     __mapper_args__ = {
@@ -38,6 +50,10 @@ class SoilMoistureSensor(Thing):
     def get_data_type(self):
         return DataType.Float
 
+    @classmethod
+    def display_name(cls):
+        return 'Soil Moisture Sensor'
+
 
 class LEDs(Thing):
     __mapper_args__ = {
@@ -46,6 +62,10 @@ class LEDs(Thing):
 
     def get_data_type(self):
         return DataType.String
+
+    @classmethod
+    def display_name(cls):
+        return None
 
 
 class Switch(Thing):
@@ -62,6 +82,10 @@ class Switch(Thing):
     def off(self):
         mq.publish(self.get_action_topic(), "off")
 
+    @classmethod
+    def display_name(cls):
+        return 'Switch'
+
 
 class Button(Thing):
     __mapper_args__ = {
@@ -70,6 +94,10 @@ class Button(Thing):
 
     def get_data_type(self):
         return DataType.Boolean
+
+    @classmethod
+    def display_name(cls):
+        return None
 
 
 class Shelly(Switch):
@@ -92,6 +120,10 @@ class Shelly(Switch):
             state = f"unknown,{state}"
             return super().process_status(db, state)
         return self.id, type(self), "state", last_state.id
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly'
 
 
 class ShellyButton(Thing):
@@ -116,6 +148,10 @@ class ShellyButton(Thing):
             ...
         event = data.get("event") # S, SS, SSS, L
         return self.id, type(self), "event", event
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Button'
 
 
 thing_type_table = {
