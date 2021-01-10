@@ -160,7 +160,38 @@ async def ws_type_create_or_edit(db, websocket, data):
         data['vnode'] = thing.vnode_id
         data['visible'] = thing.visible
 
-    await websocket.send(json.dumps(dict(type="edit_data", data=data)))
+    await websocket.send(json.dumps(dict(type="edit_data", kind="thing", data=data)))
+
+
+async def ws_type_edit_save(db, websocket, data):
+    kind = data.get('editing')
+    if kind == 'thing':
+        data = data.get('data')
+        thing = db.query(Thing).get(data["id"]) if data.get("id") else None
+        new_thing = not thing
+        if new_thing:
+            thing = Thing()
+            db.add(thing)
+        thing.name = data['name']
+        if new_thing:
+            thing.type = data['thing_type']
+        thing.device_id = data['device_id']
+        thing.vnode_id = data['vnode']
+        thing.visible = data['visible']
+        prev_views = set(thing.views)
+        thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
+        db.commit()
+        await websocket.send(json.dumps(dict(type="edit_ok")))
+        await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])))
+        if prev_views != set(thing.views):
+            views_query = db.query(View).order_by(View.name, View.id).all()
+            known_things = db.query(Thing).order_by(Thing.id).all()
+            views = dict(All=[thing.id for thing in known_things])
+            views.update({view.name: [thing.id for thing in view.things] for view in views_query})
+            await send_to_all(json.dumps(dict(type="views", views=views)))
+        if new_thing:
+            mq.subscribe(thing.get_state_topic())
+
 
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
@@ -169,7 +200,7 @@ async def handle_ws_connection(websocket, path):
     time.sleep(0.2)
 
     try:
-        known_things = db.query(Thing).filter_by(visible=True).order_by(Thing.id).all()
+        known_things = db.query(Thing).order_by(Thing.id).all()
         msg = dict(type="things", things=[t.to_dict() for t in known_things])
         await websocket.send(json.dumps(msg))
 
@@ -199,8 +230,9 @@ async def handle_ws_connection(websocket, path):
                         elif msg_type == "last_seen":
                             await ws_type_last_seen(db, websocket, data)
                         elif msg_type == "create_or_edit":
-                            wslog.info("create_or_edit")
                             await ws_type_create_or_edit(db, websocket, data)
+                        elif msg_type == "edit_save":
+                            await ws_type_edit_save(db, websocket, data)
                         else:
                             wslog.warning("Unknown msg_type {}".format(msg_type))
                     else:
