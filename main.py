@@ -68,7 +68,8 @@ def rule_executer_thread(queue):
                     continue
                 try:
                     if kind == "state":
-                        revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id), db.query(State).get(data))
+                        revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id),
+                                                 db.query(State).get(data))
                     elif kind == "event":
                         revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
                     else:
@@ -147,7 +148,8 @@ async def ws_type_create_or_edit(db, websocket, data):
 
     data = dict(id=None,
                 views=[dict(value=v.id, text=v.name) for v in db.query(View).order_by(View.name, View.id).all()],
-                types=[dict(value=k, text=cls.display_name()) for k, cls in sorted(models.things.thing_type_table.items()) if cls.display_name()],
+                types=[dict(value=k, text=cls.display_name()) for k, cls in
+                       sorted(models.things.thing_type_table.items()) if cls.display_name()],
                 thing_views=[],
                 thing_type=None,
                 visible=True,
@@ -156,7 +158,7 @@ async def ws_type_create_or_edit(db, websocket, data):
                 vnode=0
                 )
 
-    if thing: # Edit
+    if thing:  # Edit
         data['id'] = thing.id
         data['thing_views'] = [view.id for view in thing.views.all()]
         data['thing_type'] = thing.type
@@ -241,11 +243,14 @@ async def handle_ws_connection(websocket, path):
                         else:
                             wslog.warning("Unknown msg_type {}".format(msg_type))
                     else:
-                        wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
+                        wslog.warning(
+                            "Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
                 else:
-                    wslog.warning("Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
+                    wslog.warning(
+                        "Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
             except json.JSONDecodeError as err:
-                wslog.warning("Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
+                wslog.warning(
+                    "Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
             db.close()
         else:
             wslog.info("Client {} disconnected".format(websocket.remote_address))
@@ -292,7 +297,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         db = shared.db_session_factory()
         ts = [thing.get_state_topic() for thing in db.query(Thing).all()] + ["alive"]
         db.close()
-        client.subscribe(list(zip(ts, [0]*len(ts))))
+        client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
 def on_mqtt_disconnect(client, userdata, rc):
