@@ -1,5 +1,5 @@
 import sqlalchemy as sa
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.ext.mutable import MutableDict
 from enum import Enum
 import datetime
@@ -172,3 +172,17 @@ class RuleState(Base):
     __tablename__ = "rule_state"
     id = sa.Column(sa.String, primary_key=True)
     enabled = sa.Column(sa.Boolean, default=True)
+
+class Trend(Base):
+    __tablename__ = 'trends'
+    thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'), primary_key=True)
+    #thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
+
+    interval = sa.Column(sa.types.Interval(native=True), nullable=False)
+    start = sa.Column(sa.DateTime(timezone=True), primary_key=True)
+    end = sa.Column(sa.DateTime(timezone=True))
+    samples = sa.Column(sa.Integer, nullable=False)
+    
+    t_min = sa.Column(sa.Float)
+    t_avg = sa.Column(sa.Float)
+    t_max = sa.Column(sa.Float)

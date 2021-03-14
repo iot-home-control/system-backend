@@ -5,3 +5,4 @@ websockets==7.0
 alembic
 python-dateutil
 croniter
+click==7.1.2

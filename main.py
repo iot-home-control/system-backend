@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 
-import mq
-import paho.mqtt.client as mqttm
-import shared
-from models.database import Thing, State, View, LastSeen, RuleState, ThingView
+import asyncio
+import datetime
+import json
 import logging
 import signal
 import threading
 import time
-import config
-import datetime
-from queue import Queue, Empty
-import models.things
-import rules
-import timer
-import websockets
-import asyncio
-import json
-import grafana
+from queue import Empty, Queue
 from typing import Optional
+
+import click
+import paho.mqtt.client as mqttm
+import websockets
+
+import config
+import grafana
+import models.things
+import mq
+import rules
+import shared
+import timer
+from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View
 
 try:
     import local_rules
@@ -374,6 +377,11 @@ def reload_sig(sig, frame):
     reload()
 
 
+@click.group()
+def cli():
+    pass
+
+@cli.command('run')
 def main():
     global rule_executor
     global timer_checker
@@ -418,5 +426,77 @@ def main():
     shutdown()
 
 
+def dt_to_interval_start(dt: datetime.datetime, minutes: int) -> datetime.datetime:
+    n = minutes*60
+    ts = int(dt.timestamp())
+    return datetime.datetime.fromtimestamp((ts//n)*n)
+
+@cli.command()
+def database_housekeeping():
+    db = shared.db_session_factory()
+
+    # Interval length in minutes, aggregate when older than x minutes
+    intervals = [
+        (5, datetime.timedelta(days=7)),
+        (15, datetime.timedelta(weeks=4)), # 4 weeks / 1 month
+        (60, datetime.timedelta(weeks=52/2)), # 26 weeks / 6 months
+        (24*60, datetime.timedelta(weeks=52)), # 52 weeks / 1 year
+    ]
+
+    def collate_data(states):
+        import math
+        vmin = math.inf
+        vmax = -math.inf
+        vsum = 0
+        for state in states:
+            vmin = min(vmin, state.status_float)
+            vmax = max(vmax, state.status_float)
+            vsum += state.status_float
+
+        vavg = vsum/len(states)
+        # TODO instead of returning put in trends table
+        return (len(states), vmin, round(vavg, 1), vmax)
+        
+
+    interval_start = datetime.datetime.now(tz=datetime.timezone.utc) - intervals[0][1]
+    interval_start = dt_to_interval_start(interval_start, intervals[0][0])
+    
+    things = db.query(Thing).all()
+    for thing in things:
+        if thing.get_data_type() != DataType.Float:
+            continue
+        db.begin_nested()
+        states = db.query(State).filter(State.thing_id == thing.id, State.when < interval_start).order_by(State.when.desc()).all()
+        data = []
+        data_bin = []
+        current_interval = (interval_start-datetime.timedelta(minutes=intervals[0][0])).replace(tzinfo=datetime.timezone.utc)
+        
+        removed =0
+        added = 0
+        for state in states:
+            if state.when < current_interval:
+                if len(data_bin):
+                    samples, vmin, vavg, vmax = collate_data(data_bin)
+                    data.append((current_interval,  (samples, vmin, vavg, vmax) ))
+                    interval_end = (interval_start - datetime.timedelta(microseconds=1)).replace(tzinfo=datetime.timezone.utc)
+                    trend = Trend(thing_id=thing.id, start=current_interval, end=interval_end, samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
+                    db.add(trend)
+                    added += 1
+                    data_bin = []
+                while state.when < current_interval:
+                    interval_start = current_interval
+                    current_interval = (current_interval - datetime.timedelta(minutes=intervals[0][0])).replace(tzinfo=datetime.timezone.utc)
+            if state.when >= current_interval:
+                data_bin.append(state)
+                db.delete(state)
+                removed += 1
+        print("Converted", removed, "state(s) to", added, "trend(s)")
+        db.commit()
+        if added != 0:
+            break
+    db.commit()
+    db.close()
+
+
 if __name__ == "__main__":
-    main()
+    cli()
