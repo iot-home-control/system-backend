@@ -39,7 +39,7 @@ class Thing(Base):
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
     last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id))
-    views =  sa.orm.relationship("View", secondary="thing_view", lazy="dynamic")
+    views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic")
 
     __mapper_args__ = {
         'polymorphic_on': type,
@@ -54,7 +54,10 @@ class Thing(Base):
                                                                                                     self.visible)
 
     def last_state(self, db):
-        return db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
+        state = db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
+        if not state:
+            state = db.query(Trend).filter_by(thing_id=self.id).order_by(Trend.end.desc()).first()
+        return state
 
     def get_state_topic(self):
         return "{type}/{device_id}/state".format(type=self.type, device_id=self.get_full_name())
@@ -131,7 +134,7 @@ class Thing(Base):
 
 class State(Base):
     __tablename__ = "state"
-    __table_args__ = (sa.Index("ix_state_id_when", "id", "when"), )
+    __table_args__ = (sa.Index("ix_state_id_when", "id", "when"),)
     id = sa.Column(sa.Integer, primary_key=True)
     thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'))
     thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
@@ -168,21 +171,27 @@ class View(Base):
 
     things = sa.orm.relationship("Thing", secondary="thing_view")
 
+
 class RuleState(Base):
     __tablename__ = "rule_state"
     id = sa.Column(sa.String, primary_key=True)
     enabled = sa.Column(sa.Boolean, default=True)
 
+
 class Trend(Base):
     __tablename__ = 'trends'
     thing_id = sa.Column(sa.Integer, sa.ForeignKey('thing.id'), primary_key=True)
-    #thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
+    # thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
 
     interval = sa.Column(sa.types.Interval(native=True), nullable=False)
     start = sa.Column(sa.DateTime(timezone=True), primary_key=True)
     end = sa.Column(sa.DateTime(timezone=True))
     samples = sa.Column(sa.Integer, nullable=False)
-    
+
     t_min = sa.Column(sa.Float)
     t_avg = sa.Column(sa.Float)
     t_max = sa.Column(sa.Float)
+
+    def to_dict(self):
+        when = self.start + (self.end - self.start) / 2
+        return dict(thing_id=self.thing_id, when=when, status_str=None, status_bool=None, status_float=self.t_avg)
