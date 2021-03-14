@@ -9,6 +9,7 @@ import threading
 import time
 from queue import Empty, Queue
 from typing import Optional
+import math
 
 import click
 import paho.mqtt.client as mqttm
@@ -34,6 +35,7 @@ rulelog = logging.getLogger("rule")
 timerlog = logging.getLogger("timer")
 wslog = logging.getLogger("websocket")
 mqttlog.setLevel(logging.INFO)
+hklog = logging.getLogger("housekeeping")
 
 request_shutdown = False
 did_shutdown = False
@@ -381,6 +383,7 @@ def reload_sig(sig, frame):
 def cli():
     pass
 
+
 @cli.command('run')
 def main():
     global rule_executor
@@ -427,24 +430,30 @@ def main():
 
 
 def dt_to_interval_start(dt: datetime.datetime, minutes: int) -> datetime.datetime:
-    n = minutes*60
+    n = minutes * 60
     ts = int(dt.timestamp())
-    return datetime.datetime.fromtimestamp((ts//n)*n)
+    return datetime.datetime.fromtimestamp((ts // n) * n)
 
-@cli.command()
-def database_housekeeping():
-    db = shared.db_session_factory()
 
-    # Interval length in minutes, aggregate when older than x minutes
-    intervals = [
-        (5, datetime.timedelta(days=7)),
-        (15, datetime.timedelta(weeks=4)), # 4 weeks / 1 month
-        (60, datetime.timedelta(weeks=52/2)), # 26 weeks / 6 months
-        (24*60, datetime.timedelta(weeks=52)), # 52 weeks / 1 year
-    ]
+# Interval length in minutes, aggregate when older than x minutes
+intervals = [
+    (5, datetime.timedelta(days=7)),
+    (15, datetime.timedelta(weeks=4)),  # 4 weeks / 1 month
+    (60, datetime.timedelta(weeks=52 / 2)),  # 26 weeks / 6 months
+    (24 * 60, datetime.timedelta(weeks=52)),  # 52 weeks / 1 year
+]
+dt_epsilon = datetime.timedelta(microseconds=1)
+
+
+def collate_states_to_trends(db):
+    """ Collates stored states into trends of the finest configured interval.
+
+    This is done by iterating over all stored trends that are older than the single state retention time configured in the finest grained trend interval.
+    Interation is done in reverse time order (from youngest to oldest) - starting at an interval boundary - so no partial intervals are created.
+    Iteration is done on a per thing basis.
+    """
 
     def collate_data(states):
-        import math
         vmin = math.inf
         vmax = -math.inf
         vsum = 0
@@ -453,48 +462,129 @@ def database_housekeeping():
             vmax = max(vmax, state.status_float)
             vsum += state.status_float
 
-        vavg = vsum/len(states)
-        # TODO instead of returning put in trends table
+        vavg = vsum / len(states)
         return (len(states), vmin, round(vavg, 1), vmax)
-        
 
-    interval_start = datetime.datetime.now(tz=datetime.timezone.utc) - intervals[0][1]
-    interval_start = dt_to_interval_start(interval_start, intervals[0][0])
-    
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+
     things = db.query(Thing).all()
     for thing in things:
         if thing.get_data_type() != DataType.Float:
             continue
         db.begin_nested()
-        states = db.query(State).filter(State.thing_id == thing.id, State.when < interval_start).order_by(State.when.desc()).all()
+        interval_start = now - intervals[0][1]
+        interval_start = dt_to_interval_start(interval_start, intervals[0][0])
+        interval_length = datetime.timedelta(minutes=intervals[0][0])
+        current_interval = (interval_start - interval_length).replace(tzinfo=datetime.timezone.utc)
+
+        states = db.query(State).filter(State.thing_id == thing.id, State.when < interval_start).order_by(
+            State.when.desc()).all()
         data = []
         data_bin = []
-        current_interval = (interval_start-datetime.timedelta(minutes=intervals[0][0])).replace(tzinfo=datetime.timezone.utc)
-        
-        removed =0
+
+        removed = 0
         added = 0
         for state in states:
             if state.when < current_interval:
                 if len(data_bin):
                     samples, vmin, vavg, vmax = collate_data(data_bin)
-                    data.append((current_interval,  (samples, vmin, vavg, vmax) ))
-                    interval_end = (interval_start - datetime.timedelta(microseconds=1)).replace(tzinfo=datetime.timezone.utc)
-                    trend = Trend(thing_id=thing.id, start=current_interval, end=interval_end, samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
+                    data.append((current_interval, (samples, vmin, vavg, vmax)))
+                    interval_end = (interval_start - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
+                    trend = Trend(thing_id=thing.id, interval=interval_length, start=current_interval, end=interval_end,
+                                  samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
                     db.add(trend)
                     added += 1
                     data_bin = []
                 while state.when < current_interval:
                     interval_start = current_interval
-                    current_interval = (current_interval - datetime.timedelta(minutes=intervals[0][0])).replace(tzinfo=datetime.timezone.utc)
+                    current_interval = (current_interval - interval_length).replace(tzinfo=datetime.timezone.utc)
             if state.when >= current_interval:
                 data_bin.append(state)
                 db.delete(state)
                 removed += 1
-        print("Converted", removed, "state(s) to", added, "trend(s)")
         db.commit()
-        if added != 0:
-            break
+        hklog.debug(f"Thing ({thing.id}, {thing.type}) {thing.name}: Collated {removed} states into {added} trends")
     db.commit()
+
+
+def collate_trends(db):
+    """ Collate trends that are old enough into coarser trends based on configured intervals.
+
+    In contrast to `collate_states` this methods runs in bottom-up fashion i.e. from oldest to youngest trend.
+    For easier code structure the trends are collated from finest to coarsests.
+    In worst case the data is put firstly in the second finest bin and then in the next coarser bin and so on.
+    This might need some time when running initial data collation or if data housekeeping was not run for a longer period.
+
+    Within the loop for the trends the data of each thing is collected in a dictionary to avoid running over the data again and again.
+    A bucket is closed when a trend outsinde the current interval is found.
+    Closing the bucket adds the new trend to the database and removes the finer ones which were used to generate it.
+    In the end there might be buckets which have not been closed. Their content is kept in uncollated in the database.
+    """
+
+    def collate_data(trends):
+        vmin = math.inf
+        vmax = -math.inf
+        vsum = 0
+        count = 0
+        for trend in trends:
+            vmin = min(vmin, trend.t_min)
+            vmax = max(vmax, trend.t_max)
+            vsum += trend.t_avg * trend.samples
+            count += trend.samples
+        vavg = vsum / count
+        return (count, vmin, round(vavg, 1), vmax)
+
+    for idx in range(1, len(intervals)):
+        prv_len = datetime.timedelta(minutes=intervals[idx - 1][0])
+        cur_len = datetime.timedelta(minutes=intervals[idx][0])
+        keep_after = (datetime.datetime.now() - intervals[idx][1]).replace(tzinfo=datetime.timezone.utc)
+        interval_start = {}
+        interval_end = {}
+        interval_data = {}
+
+        removed = 0
+        added = 0
+        db.begin_nested()
+        for trend in db.query(Trend).filter(Trend.interval == prv_len and Trend.start < keep_after).order_by(
+                Trend.start.asc()).all():
+            tid = trend.thing_id
+            if interval_start.get(tid) is None:
+                interval_start[tid] = dt_to_interval_start(trend.start, cur_len.total_seconds() // 60).replace(
+                    tzinfo=datetime.timezone.utc)
+                interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
+                interval_data[tid] = []
+            end = interval_end[tid]
+            if trend.start > end:
+                samples, vmin, vavg, vmax = collate_data(interval_data[tid])
+                coarser_trend = Trend(thing_id=trend.thing_id, interval=cur_len, start=interval_start[tid],
+                                      end=interval_end[tid],
+                                      samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
+                db.add(coarser_trend)
+                added += 1
+                removed += len(interval_data[tid])
+                for t in interval_data[tid]:
+                    db.delete(t)
+
+                interval_start[tid] = dt_to_interval_start(trend.start, cur_len.total_seconds() // 60).replace(
+                    tzinfo=datetime.timezone.utc)
+                interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
+                interval_data[tid] = []
+            interval_data[tid].append(trend)
+        db.commit()  # commit begin_nested
+        hklog.debug(f"Collated {removed} trends of {prv_len} into {added} trends of {cur_len}")
+    db.commit()  # commit transaction
+
+
+@cli.command()
+def database_housekeeping():
+    db = shared.db_session_factory()
+
+    hklog.info("Collate states to trends")
+    collate_states_to_trends(db)
+    hklog.info("Collate trends to coarser trends")
+    collate_trends(db)
+    hklog.info("Done")
+
     db.close()
 
 
