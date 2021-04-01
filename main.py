@@ -534,9 +534,9 @@ def collate_trends(db):
         for trend in trends:
             vmin = min(vmin, trend.t_min)
             vmax = max(vmax, trend.t_max)
-            vsum += trend.t_avg * trend.samples
+            vsum += trend.t_avg
             count += trend.samples
-        vavg = vsum / count
+        vavg = vsum / len(trends)
         return (count, vmin, round(vavg, 1), vmax)
 
     for idx in range(1, len(intervals)):
