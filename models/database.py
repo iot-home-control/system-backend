@@ -30,6 +30,9 @@ class LastSeen(Base):
         db.commit()
 
 
+thing_state_cache = dict()
+
+
 class Thing(Base):
     __tablename__ = "thing"
     id = sa.Column(sa.Integer, primary_key=True)
@@ -54,10 +57,13 @@ class Thing(Base):
                                                                                                     self.visible)
 
     def last_state(self, db):
-        state = db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
-        if not state:
-            state = db.query(Trend).filter_by(thing_id=self.id).order_by(Trend.end.desc()).first()
-        return state
+        if self.id not in thing_state_cache:
+            state = db.query(State).filter_by(thing_id=self.id).order_by(State.when.desc()).first()
+            if not state:
+                state = db.query(Trend).filter_by(thing_id=self.id).order_by(Trend.end.desc()).first()
+            thing_state_cache[self.id] = state
+
+        return thing_state_cache[self.id]
 
     def get_state_topic(self):
         return "{type}/{device_id}/state".format(type=self.type, device_id=self.get_full_name())
@@ -92,6 +98,7 @@ class Thing(Base):
 
         db.add(state)
         db.commit()
+        thing_state_cache[self.id] = state
         return self.id, type(self), "state", state.id
 
     @staticmethod

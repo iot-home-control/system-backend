@@ -376,6 +376,12 @@ def shutdown_sig(sig, frame):
 
 def reload():
     mq.stop()
+    import models.database
+    models.database.thing_state_cache.clear()
+    db = shared.db_session_factory()
+    for thing in db.query(Thing).all():
+        thing.last_state()
+    db.close()
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
 
 
@@ -424,6 +430,11 @@ def main():
         pass
     except AttributeError:  # no function
         pass
+
+    db = shared.db_session_factory()
+    for thing in db.query(Thing).all():
+        thing.last_state()
+    db.close()
 
     try:
         while not request_shutdown:
