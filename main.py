@@ -108,7 +108,7 @@ async def send_to_all(msg):
         except websockets.exceptions.ConnectionClosed:
             pass
 
-    await asyncio.wait([sender(ws) for ws in connected_wss])
+    await asyncio.wait([asyncio.create_task(sender(ws)) for ws in connected_wss])
 
 
 class JsonEncoder(json.JSONEncoder):
