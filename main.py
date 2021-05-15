@@ -266,6 +266,7 @@ async def handle_ws_connection(websocket, path):
 def ws_thread(queue):
     wslog.info("Starting up")
     logging.getLogger("websockets.protocol").setLevel(logging.INFO)
+    logging.getLogger("websockets.server").setLevel(logging.INFO)
     try:
         global ws_event_loop
         ws_event_loop = asyncio.new_event_loop()
