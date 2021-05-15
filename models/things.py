@@ -126,6 +126,50 @@ class Shelly(Switch):
         return 'Shelly'
 
 
+class ShellyTemperature(TemperatureSensor):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shelly_temperature'
+    }
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/ext_temperature/{vnode_id}".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state):
+        LastSeen.update_last_seen(db, self.device_id)
+        state = f"unknown,{state}"
+        return super().process_status(db, state)
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Temperature'
+
+
+class ShellyHumidity(HumiditySensor):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shelly_humidity'
+    }
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/ext_humidity/{vnode_id}".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state):
+        LastSeen.update_last_seen(db, self.device_id)
+        state = f"unknown,{state}"
+        return super().process_status(db, state)
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Humidity'
+
+
 class ShellyButton(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'shellybutton'
@@ -164,4 +208,6 @@ thing_type_table = {
     "shelly": Shelly,
     "pressure": PressureSensor,
     "shellybutton": ShellyButton,
+    "shelly_temperature": ShellyTemperature,
+    "shelly_humidity": ShellyHumidity,
 }

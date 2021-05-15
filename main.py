@@ -322,6 +322,11 @@ def on_mqtt_message(client, userdata, message):
                 node_type = "shelly"
                 if vnode.startswith("shellybutton1"):
                     node_type = "shellybutton"
+                if stop.split("/")[0] == "ext_temperature":
+                    print("found shelly_temperature")
+                    node_type = "shelly_temperature"
+                if stop.split("/")[0] == "ext_humidity":
+                    node_type = "shelly_humidity"
             else:
                 device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
             thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
