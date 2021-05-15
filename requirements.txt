@@ -1,8 +1,8 @@
-paho-mqtt==1.4.*
+paho-mqtt==1.5.1
 psycopg2-binary==2.8.*
 SQLAlchemy==1.2.*
-websockets==7.0
+websockets==9.0.1
 alembic
 python-dateutil
 croniter
-click==7.1.2
+click==8.0.0
