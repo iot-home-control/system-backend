@@ -223,39 +223,38 @@ async def handle_ws_connection(websocket, path):
         db.close()
 
         async for message in websocket:
-            db = shared.db_session_factory()
             try:
                 data = json.loads(message)
-                if isinstance(data, dict):
-                    msg_type = data.get("type")
-                    if msg_type:
-                        if msg_type == "message":
-                            await send_to_all(json.dumps(data))
-                        elif msg_type == "command":
-                            # wslog.info("Command message: {}".format(message))
-                            await ws_type_command(db, websocket, data)
-                        elif msg_type == "last_seen":
-                            await ws_type_last_seen(db, websocket, data)
-                        elif msg_type == "create_or_edit":
-                            await ws_type_create_or_edit(db, websocket, data)
-                        elif msg_type == "edit_save":
-                            await ws_type_edit_save(db, websocket, data)
-                        else:
-                            wslog.warning("Unknown msg_type {}".format(msg_type))
-                    else:
-                        wslog.warning(
-                            "Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
-                else:
-                    wslog.warning(
-                        "Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
             except json.JSONDecodeError as err:
                 wslog.warning(
                     "Discarding message from {}: Can't decode as JSON ({})".format(websocket.remote_address, str(err)))
+                continue
+            if not isinstance(data, dict):
+                wslog.warning(
+                    "Discarding message from {}: Not a JSON object: {}".format(websocket.remote_address, data))
+                continue
+            msg_type = data.get("type")
+            if not msg_type:
+                wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
+                continue
+            db = shared.db_session_factory()
+            if msg_type == "message":
+                await send_to_all(json.dumps(data))
+            elif msg_type == "command":
+                # wslog.info("Command message: {}".format(message))
+                await ws_type_command(db, websocket, data)
+            elif msg_type == "last_seen":
+                await ws_type_last_seen(db, websocket, data)
+            elif msg_type == "create_or_edit":
+                await ws_type_create_or_edit(db, websocket, data)
+            elif msg_type == "edit_save":
+                await ws_type_edit_save(db, websocket, data)
+            else:
+                wslog.warning("Unknown msg_type {}".format(msg_type))
             db.close()
         else:
             wslog.info("Client {} disconnected".format(websocket.remote_address))
             connected_wss.remove(websocket)
-            db.close()
     except websockets.exceptions.ConnectionClosed:
         connected_wss.remove(websocket)
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
