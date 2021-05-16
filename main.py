@@ -10,6 +10,7 @@ import time
 from queue import Empty, Queue
 from typing import Optional
 import math
+from itsdangerous import URLSafeSerializer
 
 import click
 import paho.mqtt.client as mqttm
@@ -47,6 +48,8 @@ rule_queue = Queue()
 ws_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
+
+cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
 
 def rule_executer_thread(queue):
@@ -200,8 +203,58 @@ async def ws_type_edit_save(db, websocket, data):
             mq.subscribe(thing.get_state_topic())
 
 
+async def new_ws_session(websocket):
+    import ipaddress
+    real_peer_address = websocket.request_headers.get("X-Real-IP", websocket.remote_address[0])
+    addr = ipaddress.ip_address(real_peer_address)
+
+    addr_is_in_local_net = False
+    if config.LOCAL_NET:
+        addr_is_in_local_net = addr in ipaddress.ip_network(config.LOCAL_NET)
+
+    addr_scope = "remote"
+    if addr.is_private and (addr_is_in_local_net or addr.is_loopback):
+        addr_scope = "local"
+
+    session_data = dict(
+        session_permission="unauthenticated",
+        session_scope=addr_scope,
+    )
+    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session_data))))
+    return session_data
+
+
+async def ws_authenticate(db, websocket, data, session):
+    user = data.get("user")
+    password = data.get("password")
+    if not user or not password:
+        await websocket.send(json.dumps(dict(type="auth_failed")))
+
+    #  TODO: Check credentials...
+
+    session["session_permission"] = "authenticated"
+    await websocket.send(json.dumps(dict(type="auth_ok")))
+    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session))))
+
+
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
+    cookie_header = websocket.request_headers.get("Cookie", "")
+    if not cookie_header:
+        session = await new_ws_session(websocket)
+    else:
+        import http.cookies
+        cookies = http.cookies.SimpleCookie(cookie_header)
+        if "auth" in cookies:
+            from itsdangerous import BadSignature
+            try:
+                session = cookie_serializer.loads(cookies["auth"].value)
+            except BadSignature:
+                session = await new_ws_session(websocket)
+        else:
+            session = await new_ws_session(websocket)
+    print(f"{session=}")
+
     connected_wss.add(websocket)
     db = shared.db_session_factory()
     time.sleep(0.2)
@@ -249,6 +302,8 @@ async def handle_ws_connection(websocket, path):
                 await ws_type_create_or_edit(db, websocket, data)
             elif msg_type == "edit_save":
                 await ws_type_edit_save(db, websocket, data)
+            elif msg_type == "authenticate":
+                await ws_authenticate(db, websocket, data, session)
             else:
                 wslog.warning("Unknown msg_type {}".format(msg_type))
             db.close()
