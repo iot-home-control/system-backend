@@ -281,7 +281,7 @@ def ws_thread(queue):
 
 async def ws_shutdown():
     if connected_wss:
-        await asyncio.wait([ws.close(reason="Shutting down") for ws in connected_wss])
+        await asyncio.wait([asyncio.create_task(ws.close(reason="Shutting down")) for ws in connected_wss])
     ws_event_loop.stop()
     await ws_event_loop.shutdown_asyncgens()
 
