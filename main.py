@@ -327,6 +327,10 @@ def on_mqtt_message(client, userdata, message):
                     node_type = "shelly_temperature"
                 if stop.split("/")[0] == "ext_humidity":
                     node_type = "shelly_humidity"
+            elif node_type == "FRISCHLUFT":
+                device_id = vnode
+                vnode_id = "0"
+                node_type = "frischluftworks-co2"
             else:
                 device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
             thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)

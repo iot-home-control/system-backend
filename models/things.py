@@ -198,6 +198,31 @@ class ShellyButton(Thing):
         return 'Shelly Button'
 
 
+class FrischluftWorksCO2Sensor(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'frischluftworks-co2'
+    }
+
+    def get_data_type(self):
+        return DataType.Float
+
+    def get_state_topic(self):
+        return "FRISCHLUFT/{device_id}/values/raw/co2".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state):
+        LastSeen.update_last_seen(db, self.device_id)
+        state = f"local,{state}"
+        return super().process_status(db, state)
+
+    @classmethod
+    def display_name(cls):
+        return "frischluft.works CO₂ Sensor"
+
+
 thing_type_table = {
     "switch": Switch,
     "temperature": TemperatureSensor,
@@ -210,4 +235,5 @@ thing_type_table = {
     "shellybutton": ShellyButton,
     "shelly_temperature": ShellyTemperature,
     "shelly_humidity": ShellyHumidity,
+    "frischluftworks-co2": FrischluftWorksCO2Sensor,
 }
