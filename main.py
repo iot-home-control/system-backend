@@ -2,6 +2,8 @@
 
 import asyncio
 import datetime
+import enum
+import functools
 import json
 import logging
 import signal
@@ -10,11 +12,15 @@ import time
 from queue import Empty, Queue
 from typing import Optional
 import math
+
+
+import sqlalchemy.exc
 from itsdangerous import URLSafeSerializer
 
 import click
 import paho.mqtt.client as mqttm
 import websockets
+import bcrypt
 
 import config
 import grafana
@@ -23,7 +29,7 @@ import mq
 import rules
 import shared
 import timer
-from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View
+from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User
 
 try:
     import local_rules
@@ -48,6 +54,7 @@ rule_queue = Queue()
 ws_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
+sessions = dict()
 
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
@@ -121,6 +128,35 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+class AccessLevel(enum.IntEnum):
+    Unauthenticated = 0
+    Local = 1
+    Authenticated = 2
+
+
+def check_access(level=AccessLevel.Authenticated):
+    def wrapper(f):
+        @functools.wraps(f)
+        async def check(db, websocket, *args, **kwargs):
+            if level == AccessLevel.Unauthenticated:
+                await f(db, websocket, *args, **kwargs)
+
+            session = sessions.get(websocket)
+            if not session:
+                await websocket.send(json.dumps(dict(type="auth_required")))
+
+            session_authenticated = session["session_permission"] == "authenticated"
+            session_local = session["session_scope"] == "local"
+
+            if session_authenticated or (level == AccessLevel.Local and session_local):
+                await f(db, websocket, *args, **kwargs)
+            else:
+                await websocket.send(json.dumps(dict(type="auth_required")))
+        return check
+    return wrapper
+
+
+@check_access(level=AccessLevel.Local)
 async def ws_type_command(db, websocket, data):
     thing_id = data.get("id")
     thing = db.query(Thing).get(thing_id)
@@ -138,6 +174,7 @@ async def ws_type_command(db, websocket, data):
         wslog.warning("Unsupported type for command: '{}'".format(thing.type))
 
 
+@check_access(level=AccessLevel.Local)
 async def ws_type_last_seen(db, websocket, data):
     things = db.query(Thing).all()
     last_seen = {thing.id: thing.last_seen.isoformat() if thing.last_seen else None for thing in things}
@@ -145,6 +182,7 @@ async def ws_type_last_seen(db, websocket, data):
     await websocket.send(json.dumps(msg))
 
 
+@check_access(level=AccessLevel.Authenticated)
 async def ws_type_create_or_edit(db, websocket, data):
     thing_id = data.get("id")
     thing = db.query(Thing).get(thing_id) if thing_id else None
@@ -173,6 +211,7 @@ async def ws_type_create_or_edit(db, websocket, data):
     await websocket.send(json.dumps(dict(type="edit_data", kind="thing", data=data)))
 
 
+@check_access(level=AccessLevel.Authenticated)
 async def ws_type_edit_save(db, websocket, data):
     kind = data.get('editing')
     if kind == 'thing':
@@ -224,17 +263,24 @@ async def new_ws_session(websocket):
     return session_data
 
 
+@check_access(level=AccessLevel.Unauthenticated)
 async def ws_authenticate(db, websocket, data, session):
-    user = data.get("user")
+    username = data.get("username")
     password = data.get("password")
-    if not user or not password:
+    if not username or not password:
         await websocket.send(json.dumps(dict(type="auth_failed")))
 
-    #  TODO: Check credentials...
+    user = db.query(User).filter_by(name=username).one_or_none()
+    if not user:
+        await websocket.send(json.dumps(dict(type="auth_failed")))
+        return
 
-    session["session_permission"] = "authenticated"
-    await websocket.send(json.dumps(dict(type="auth_ok")))
-    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session))))
+    if bcrypt.checkpw(password.encode(), user.pwhash.encode()):
+        session["session_permission"] = "authenticated"
+        await websocket.send(json.dumps(dict(type="auth_ok")))
+        await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session))))
+    else:
+        await websocket.send(json.dumps(dict(type="auth_failed")))
 
 
 async def handle_ws_connection(websocket, path):
@@ -256,23 +302,25 @@ async def handle_ws_connection(websocket, path):
     print(f"{session=}")
 
     connected_wss.add(websocket)
+    sessions[websocket] = session
     db = shared.db_session_factory()
     time.sleep(0.2)
 
     try:
-        known_things = db.query(Thing).order_by(Thing.id).all()
-        msg = dict(type="things", things=[t.to_dict() for t in known_things])
-        await websocket.send(json.dumps(msg))
+        if session["session_permission"] == "authenticated":
+            known_things = db.query(Thing).order_by(Thing.id).all()
+            msg = dict(type="things", things=[t.to_dict() for t in known_things])
+            await websocket.send(json.dumps(msg))
 
-        states = [s for s in (t.last_state(db) for t in known_things) if s]
-        msg = dict(type="states", states=[s.to_dict() for s in states])
-        await websocket.send(json.dumps(msg, cls=JsonEncoder))
+            states = [s for s in (t.last_state(db) for t in known_things) if s]
+            msg = dict(type="states", states=[s.to_dict() for s in states])
+            await websocket.send(json.dumps(msg, cls=JsonEncoder))
 
-        views_query = db.query(View).order_by(View.name, View.id).all()
-        views = dict(All=[thing.id for thing in known_things])
-        views.update({view.name: [thing.id for thing in view.things] for view in views_query})
-        msg = dict(type="views", views=views)
-        await websocket.send(json.dumps(msg))
+            views_query = db.query(View).order_by(View.name, View.id).all()
+            views = dict(All=[thing.id for thing in known_things])
+            views.update({view.name: [thing.id for thing in view.things] for view in views_query})
+            msg = dict(type="views", views=views)
+            await websocket.send(json.dumps(msg))
         db.close()
 
         async for message in websocket:
@@ -291,10 +339,7 @@ async def handle_ws_connection(websocket, path):
                 wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
                 continue
             db = shared.db_session_factory()
-            if msg_type == "message":
-                await send_to_all(json.dumps(data))
-            elif msg_type == "command":
-                # wslog.info("Command message: {}".format(message))
+            if msg_type == "command":
                 await ws_type_command(db, websocket, data)
             elif msg_type == "last_seen":
                 await ws_type_last_seen(db, websocket, data)
@@ -310,8 +355,10 @@ async def handle_ws_connection(websocket, path):
         else:
             wslog.info("Client {} disconnected".format(websocket.remote_address))
             connected_wss.remove(websocket)
+            del sessions[websocket]
     except websockets.exceptions.ConnectionClosed:
         connected_wss.remove(websocket)
+        del sessions[websocket]
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
         if db:
             db.close()
@@ -666,6 +713,21 @@ def database_housekeeping():
     hklog.info("Done")
 
     db.close()
+
+
+@cli.command("add-user")
+@click.argument("name", type=click.STRING)
+@click.option("--display-name", type=click.STRING)
+def add_user(name, display_name=None):
+    db = shared.db_session_factory()
+    pw = click.prompt("Password", hide_input=True, type=click.STRING)
+    pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
+    user = User(name=name, display_name=display_name, pwhash=pw_hash.decode("ascii"))
+    db.add(user)
+    try:
+        db.commit()
+    except sqlalchemy.exc.IntegrityError:
+        print("Username not available")
 
 
 if __name__ == "__main__":
