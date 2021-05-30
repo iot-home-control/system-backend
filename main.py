@@ -302,7 +302,6 @@ async def handle_ws_connection(websocket, path):
                 session = await new_ws_session(websocket)
         else:
             session = await new_ws_session(websocket)
-    print(f"{session=}")
 
     connected_wss.add(websocket)
     sessions[websocket] = session
