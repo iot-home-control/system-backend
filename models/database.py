@@ -202,3 +202,11 @@ class Trend(Base):
     def to_dict(self):
         when = self.start + (self.end - self.start) / 2
         return dict(thing_id=self.thing_id, when=when, status_str=None, status_bool=None, status_float=self.t_avg)
+
+
+class User(Base):
+    __tablename__ = 'users'
+    id = sa.Column(sa.Integer, primary_key=True)
+    name = sa.Column(sa.String, unique=True, nullable=False)
+    pwhash = sa.Column(sa.String, nullable=False)
+    display_name = sa.Column(sa.String)

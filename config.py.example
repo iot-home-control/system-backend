@@ -1,6 +1,11 @@
 SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+# Generate with secrets.token_urlsafe()
+SECRET_KEY = "notreallyasecret-pleasedontuse"
+# Put your local network here (or None)
+LOCAL_NET = "192.168.1.0/24"
+
 MQTT_HOST = "1.2.3.4"
 MQTT_USER = "username"
 MQTT_PASS = "password"
