@@ -140,10 +140,12 @@ def check_access(level=AccessLevel.Authenticated):
         async def check(db, websocket, *args, **kwargs):
             if level == AccessLevel.Unauthenticated:
                 await f(db, websocket, *args, **kwargs)
+                return
 
             session = sessions.get(websocket)
             if not session:
                 await websocket.send(json.dumps(dict(type="auth_required")))
+                return
 
             session_authenticated = session["session_permission"] == "authenticated"
             session_local = session["session_scope"] == "local"
