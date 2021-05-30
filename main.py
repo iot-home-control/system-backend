@@ -281,6 +281,7 @@ async def ws_authenticate(db, websocket, data, session):
         session["session_permission"] = "authenticated"
         await websocket.send(json.dumps(dict(type="auth_ok")))
         await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session))))
+        await websocket.close()
     else:
         await websocket.send(json.dumps(dict(type="auth_failed")))
 
