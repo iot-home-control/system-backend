@@ -308,6 +308,7 @@ async def handle_ws_connection(websocket, path):
 
     try:
         if session["session_permission"] == "authenticated":
+            await websocket.send(json.dumps(dict(type="auth_ok")))
             known_things = db.query(Thing).order_by(Thing.id).all()
             msg = dict(type="things", things=[t.to_dict() for t in known_things])
             await websocket.send(json.dumps(msg))
