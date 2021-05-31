@@ -410,7 +410,7 @@ def on_mqtt_disconnect(client, userdata, rc):
         mqttlog.info("Disconnected from MQTT broker")
     else:
         mqttlog.warning("Connection to MQTT broker lost. Reconnecting.")
-        client.connect_async()
+        client.connect_async(config.MQTT_HOST)
 
 
 def on_mqtt_message(client, userdata, message):
