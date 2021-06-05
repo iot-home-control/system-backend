@@ -261,7 +261,8 @@ async def new_ws_session(websocket):
         session_permission="unauthenticated",
         session_scope=addr_scope,
     )
-    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session_data))))
+    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session_data),
+                                         max_age=180*24*60*60)))
     return session_data
 
 
@@ -280,7 +281,8 @@ async def ws_authenticate(db, websocket, data, session):
     if bcrypt.checkpw(password.encode(), user.pwhash.encode()):
         session["session_permission"] = "authenticated"
         await websocket.send(json.dumps(dict(type="auth_ok")))
-        await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session))))
+        await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session),
+                                             max_age=180*24*60*60)))
         await websocket.close()
     else:
         await websocket.send(json.dumps(dict(type="auth_failed")))
