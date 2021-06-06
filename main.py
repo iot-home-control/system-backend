@@ -622,7 +622,7 @@ def collate_states_to_trends(db):
             vsum += state.status_float
 
         vavg = vsum / len(states)
-        return (len(states), vmin, round(vavg, 1), vmax)
+        return len(states), vmin, round(vavg, 1), vmax
 
     now = datetime.datetime.now(tz=datetime.timezone.utc)
 
