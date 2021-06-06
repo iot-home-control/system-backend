@@ -12,6 +12,7 @@ import time
 from queue import Empty, Queue
 from typing import Optional
 import math
+from dataclasses import dataclass, asdict
 
 
 import sqlalchemy.exc
@@ -57,6 +58,35 @@ connected_wss = set()
 sessions = dict()
 
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
+
+
+class AccessLevel(enum.IntEnum):
+    Unauthenticated = 0
+    Local = 1
+    Authenticated = 2
+
+
+@dataclass
+class Session:
+    permission: str
+    scope: str
+
+    def to_access_level(self):
+        if self.permission == "authenticated":
+            return AccessLevel.Authenticated
+        elif self.permission == "unauthenticated" and self.scope == "local":
+            return AccessLevel.Local
+        else:
+            return AccessLevel.Unauthenticated
+
+    def check_access_level(self, level: AccessLevel):
+        if level == AccessLevel.Unauthenticated:
+            return True
+        session_authenticated = self.permission == "authenticated"
+        session_local = self.scope == "local"
+        if session_authenticated or (level == AccessLevel.Local and session_local):
+            return True
+        return False
 
 
 def rule_executer_thread(queue):
@@ -108,13 +138,18 @@ def timer_checker_thread():
             timerlog.exception("Uncaught Execption in timer_checker_thread")
 
 
-async def send_to_all(msg):
+async def send_to_all(msg, restrict_to_access_level=None):
     if not connected_wss:
         return
 
     async def sender(ws):
         try:
-            await ws.send(msg)
+            if restrict_to_access_level:
+                session = sessions.get(ws)
+                if not session or session.check_access_level(restrict_to_access_level):
+                    await ws.send(msg)
+            else:
+                await ws.send(msg)
         except websockets.exceptions.ConnectionClosed:
             pass
 
@@ -128,29 +163,16 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-class AccessLevel(enum.IntEnum):
-    Unauthenticated = 0
-    Local = 1
-    Authenticated = 2
-
-
 def check_access(level=AccessLevel.Authenticated):
     def wrapper(f):
         @functools.wraps(f)
         async def check(db, websocket, *args, **kwargs):
-            if level == AccessLevel.Unauthenticated:
-                await f(db, websocket, *args, **kwargs)
-                return
-
             session = sessions.get(websocket)
             if not session:
                 await websocket.send(json.dumps(dict(type="auth_required")))
                 return
 
-            session_authenticated = session["session_permission"] == "authenticated"
-            session_local = session["session_scope"] == "local"
-
-            if session_authenticated or (level == AccessLevel.Local and session_local):
+            if session.check_access_level(level):
                 await f(db, websocket, *args, **kwargs)
             else:
                 await websocket.send(json.dumps(dict(type="auth_required")))
@@ -233,13 +255,15 @@ async def ws_type_edit_save(db, websocket, data):
         thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
         db.commit()
         await websocket.send(json.dumps(dict(type="edit_ok")))
-        await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])))
+        await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])),
+                          restrict_to_access_level=AccessLevel.Local)
         if prev_views != set(thing.views):
             views_query = db.query(View).order_by(View.name, View.id).all()
             known_things = db.query(Thing).order_by(Thing.id).all()
             views = dict(All=[thing.id for thing in known_things])
             views.update({view.name: [thing.id for thing in view.things] for view in views_query})
-            await send_to_all(json.dumps(dict(type="views", views=views)))
+            await send_to_all(json.dumps(dict(type="views", views=views)),
+                              restrict_to_access_level=AccessLevel.Local)
         if new_thing:
             mq.subscribe(thing.get_state_topic())
 
@@ -257,13 +281,10 @@ async def new_ws_session(websocket):
     if addr.is_private and (addr_is_in_local_net or addr.is_loopback):
         addr_scope = "local"
 
-    session_data = dict(
-        session_permission="unauthenticated",
-        session_scope=addr_scope,
-    )
-    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session_data),
+    session = Session(permission="unauthenticated", scope=addr_scope)
+    await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(asdict(session)),
                                          max_age=180*24*60*60)))
-    return session_data
+    return session
 
 
 @check_access(level=AccessLevel.Unauthenticated)
@@ -279,9 +300,10 @@ async def ws_authenticate(db, websocket, data, session):
         return
 
     if bcrypt.checkpw(password.encode(), user.pwhash.encode()):
-        session["session_permission"] = "authenticated"
+        session.permission = "authenticated"
         await websocket.send(json.dumps(dict(type="auth_ok")))
-        await websocket.send(json.dumps(dict(type="cookie", name="auth", value=cookie_serializer.dumps(session),
+        await websocket.send(json.dumps(dict(type="cookie", name="auth",
+                                             value=cookie_serializer.dumps(asdict(session)),
                                              max_age=180*24*60*60)))
         await websocket.close()
     else:
@@ -299,8 +321,12 @@ async def handle_ws_connection(websocket, path):
         if "auth" in cookies:
             from itsdangerous import BadSignature
             try:
-                session = cookie_serializer.loads(cookies["auth"].value)
+                session_data = cookie_serializer.loads(cookies["auth"].value)
+                session = Session(**session_data)
             except BadSignature:
+                session = await new_ws_session(websocket)
+            except TypeError as e:
+                wslog.exception(f"Failed to restore session data={session_data}")
                 session = await new_ws_session(websocket)
         else:
             session = await new_ws_session(websocket)
@@ -311,8 +337,8 @@ async def handle_ws_connection(websocket, path):
     time.sleep(0.2)
 
     try:
-        if session["session_permission"] == "authenticated":
-            await websocket.send(json.dumps(dict(type="auth_ok")))
+        if session.permission == "authenticated" or session.scope == "local":
+            await websocket.send(json.dumps(dict(type="auth_ok", level=session.to_access_level())))
             known_things = db.query(Thing).order_by(Thing.id).all()
             msg = dict(type="things", things=[t.to_dict() for t in known_things])
             await websocket.send(json.dumps(msg))
@@ -447,7 +473,8 @@ def on_mqtt_message(client, userdata, message):
             res = thing.process_status(db, message.payload.decode("ascii"))
             if res[2] == "state":
                 msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
-                asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder)), ws_event_loop)
+                asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
+                                                             restrict_to_access_level=AccessLevel.Local), ws_event_loop)
                 rule_queue.put(res)
             elif res[2] == "event":
                 rule_queue.put(res)
