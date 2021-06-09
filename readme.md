@@ -41,6 +41,11 @@ copy example config
 
 and edit the variables in config according to description in it.
 
+You also need to initialize the database using.
+
+`./venv/bin/alembic upgrade head`
+This is the same command for updating.
+
 You can run the Home Control System Backend with
 `./venv/bin/python main.py run`.
 
