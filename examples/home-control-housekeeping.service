@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Home-Control housekeeping
+After=network.service postgresql.service home-control.service
+Wants=postgresql.service home-control.service
+
+[Service]
+Type=oneshot
+User=home-control
+WorkingDirectory=/opt/home-control/system-backend
+ExecStart=/opt/home-control/venv/bin/python main.py database-housekeeping
+
+[Install]
+WantedBy=multi-user.target

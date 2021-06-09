@@ -1,0 +1,49 @@
+import datetime
+
+import rules
+import shared
+import timer
+from rules import rule, Thing
+from models.database import RuleState
+
+
+@rule("Button Rule", Thing("shellybutton", device_id="shellybutton1-DEVICE_ID"))
+def button_rule(event):
+    # Create a database connection
+    db = shared.db_session_factory()
+    if event.state == "S":
+        # Get RuleState of rule with "Rule Identifier".
+        rule_state = db.query(RuleState).get("Rule Identifier")
+        # Toggle rule state
+        rule_state.enabled = not rule_state.enabled
+        db.commit()
+    else:
+        # Get all things of type "switch" and "shelly". Thing.resolve returns all things matching the Thing descriptor.
+        switches = Thing("switch").resolve(db)
+        shellies = Thing("shelly").resolve(db)
+        # Iterate over all found things and switch them off.
+        for switch in switches + shellies:
+            switch.off()
+    # Close the database connection
+    db.close()
+
+
+@rule("Rule Identifier", Thing("temperature", name="Example"))
+def rule_function_name(event):
+    # This is a dummy rule used to demonstrate that rules can be enabled/disabled
+    print("This rule was triggered by", event)
+
+
+@rule("Timer Identifier")
+def timer_function_name(event):
+    db = shared.db_session_factory()
+    switch = Thing("switch", name="Example Switch").resolve(db)[0]
+    if switch.last_state(db).status_bool:
+        switch.off()
+    else:
+        switch.on()
+    db.close()
+
+
+def init_timers():
+    timer.add_timer("Example timer name", timer_function_name, cron="*/5 8-17 * * Mon-Fri")

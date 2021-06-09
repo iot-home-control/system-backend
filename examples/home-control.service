@@ -1,0 +1,12 @@
+[Unit]
+Description=Home-Control
+After=network.target network-online.target mosquitto.service postgresql.service
+
+[Service]
+User=home-control
+WorkingDirectory=/opt/home-control/system-backend
+ExecStart=/opt/home-control/venv/bin/python main.py run
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
