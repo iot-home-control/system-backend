@@ -7,7 +7,7 @@ Home Control has 3 Components
 - the Web Frontend
 - the firmware
 
-The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IOT). A received state is saved to a database and sent to all active web frontends via a web socket connection.
+The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IoT). A received state is saved to a database and sent to all active web frontends via a web socket connection.
 The Backend provides also a Grafana data source.
 The system backend can collate the collected data into trends.
 
@@ -16,16 +16,16 @@ The system backend can collate the collected data into trends.
 You must have installed at least:
 - python3.7
 - python3-venv
-- a database sqlite, mariadb or postgresql (we recommend the latter one)
-- a mqtt message queue e.g. mosquitto
+- a database supported by SQLAlchemy which also supports the JSON datatype. We recommend PostgreSQL.
+- a MQTT message queue e.g. mosquitto
 - a webserver, which can handle websockets (we recommend nginx)
 
-Optionally, you can install additionally:
+Optionally, you can also install:
 - grafana
 
 For authentication you need a valid TLS setup.
 
-We will assume that the Home-Control is installed in /opt/home-control
+We will assume that the Home Control is installed in /opt/home-control
 
 Unpack the release file to /opt/home-control/system-backend
 
@@ -68,11 +68,11 @@ There are examples in `local_rules.py.example` which is also in the installation
 
 We have rules and timers.
 Rules are functions which are called when either
-    - a timer expires (see later),
-    - a thing specified as rule trigger changes state
-    - another event happens, such as button presses or scene changes.
+- a timer expires (see later),
+- a thing specified as rule trigger changes state
+- another event happens, such as button presses or scene changes.
 
-A function becomes a rule if it has the `@rule` decorator. The rule decorator take a rule identifier as the first argument. Please note that rule identifiers must be unique.
+A rule is a function with the `@rule` decorator applied. The rule decorator take a rule identifier as the first argument. Please note that rule identifiers must be unique.
 The decorator also takes any number of `Thing` descriptor objects as positional arguments after the identifier. All keyword arguments are also passed to the called function.
 Please also note that the `Thing` descriptor object for rules is different from the `Thing` objects that are stored in the database, they must be resolved first into the latter.
 
@@ -85,11 +85,11 @@ There are three types of schedules:
 
 Timers can delete themselves by returning the string "DELETE".
 Each timer can only have one of the modes active at the same time (`at`, `interval`, and `cron` keyword arguments).
-Timers are stored in the database, so they will be executed if the system backend gets restarted or is not running at the scheduled time of execution.
+Timers are stored in the database. They will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time.
 
 ## Running a test environment
 
 For testing on a local machine you need a working TLS setup. This is needed for authentication since using cookies via a websocket requires it.
 You can e.g., use `mkcert` to create a trusted certificate for your local machine.
-You can use the `examples/stunnel.conf` file with `stunnel` to terminate the TLS and pass it on to the development webservers for the frontend and the Home-Control backend.
+You can use the `examples/stunnel.conf` file with `stunnel` to terminate the TLS and pass it on to the development webservers for the frontend and the Home Control backend.
 For `stunnel` you need to combine the private and public keys of your certificate before it can be used.
