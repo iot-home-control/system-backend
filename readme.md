@@ -1,13 +1,15 @@
 # Home Control
 
+Home Control is a no-cloud Internet of Things solution. 
+
 Home Control has 3 Components
 - the System Backend
 - the Web Frontend
 - the firmware
 
-The System Backend connects to a Message Queue (MQTT) to get state messages of things. A received state is saved to a database and sent to all active web frontends via a web socket connection.
+The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IOT). A received state is saved to a database and sent to all active web frontends via a web socket connection.
 The Backend provides also a Grafana data source.
-If you like the system backend can collate the collected data into trends.
+The system backend can collate the collected data into trends.
 
 ## Install Guide
 
@@ -46,19 +48,23 @@ You also need to initialize the database using.
 `./venv/bin/alembic upgrade head`
 This is the same command for updating.
 
-You can run the Home Control System Backend with
+Then, you can create a user which is needed to configure things via the webinterface.
+
+`./venv/bin/python main.py add-user <USERNAME> [--display-name DISPLAY-NAME]`
+
+Now, you can run the Home Control System Backend with
 `./venv/bin/python main.py run`.
 
 We provide a systemd service file.
 
-You can call the Home Control House Cleaning with
+You can call the Home Control Housekeeping with
 `./venv/bin/python main.py database-housekeeping`.
 See the files in `examples/` for information on how to run it regularly with a systemd timer unit.
 
 
 ## Writing rules
 You can write your own rules by creating a `local_rules.py` file in the installation directory.
-There are examples in `local_rules.py.example` which is also
+There are examples in `local_rules.py.example` which is also in the installation directory.
 
 We have rules and timers.
 Rules are functions which are called when either
