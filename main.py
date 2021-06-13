@@ -274,7 +274,7 @@ async def new_ws_session(websocket):
     addr = ipaddress.ip_address(real_peer_address)
 
     addr_is_in_local_net = False
-    if config.LOCAL_NET:
+    if hasattr(config, 'LOCAL_NET') and config.LOCAL_NET:
         addr_is_in_local_net = addr in ipaddress.ip_network(config.LOCAL_NET)
 
     addr_scope = "remote"
@@ -404,7 +404,7 @@ def ws_thread(queue):
         ws_event_loop = asyncio.new_event_loop()
         # ws_event_loop.set_debug(True)
         asyncio.set_event_loop(ws_event_loop)
-        ws_server = websockets.serve(handle_ws_connection, getattr(config, "BIND_IP", "localhost"), 8765)
+        ws_server = websockets.serve(handle_ws_connection, getattr(config, "BIND_IP", "127.0.0.1"), 8765)
         ws_event_loop.run_until_complete(ws_server)
         ws_event_loop.run_forever()
         wslog.info("Shutting down")
@@ -562,7 +562,7 @@ def main():
     websocket.start()
     print("WebSockets", end=", ")
 
-    grafana.start(bind_addr=config.BIND_IP, prefix="/grafana")
+    grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
     print("Grafana API")
 
     rules.init_timers()
