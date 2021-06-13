@@ -4,4 +4,7 @@ config.py
 .idea/
 .directory
 venv/
+.cert/
 local_rules.py
+*.sql
+stunnel.pid
