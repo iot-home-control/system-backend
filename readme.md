@@ -3,64 +3,87 @@
 Home Control is a no-cloud Internet of Things solution. 
 
 Home Control has 3 Components
-- the System Backend
-- the Web Frontend
+- the System Backend (this repository)
+- the [Web Frontend](../frontend/README.md)
 - the firmware
 
 The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IoT). A received state is saved to a database and sent to all active web frontends via a web socket connection.
 The Backend provides also a Grafana data source.
 The system backend can collate the collected data into trends.
 
-## Install Guide
-
-You must have installed at least:
-- python3.7
-- python3-venv
-- a database supported by SQLAlchemy which also supports the JSON datatype. We recommend PostgreSQL.
-- a MQTT message queue e.g. mosquitto
-- a webserver, which can handle websockets (we recommend nginx)
+## Installation Guide
+### Requirements
+Home Control is a Python project and as such should be able to run on most platforms supported by Python 3.
+On your system you should install (or should have available on your network):
+- Python3 (at least Python 3.7)
+- Python-Virtualenv (python3-venv)
+- A database supported by SQLAlchemy which also supports the JSON datatype. 
+  We recommend PostgreSQL, MySQL should also work (but has not yet been tested).
+- A MQTT message queue e.g., mosquitto
+- A webserver, which can handle websockets (we recommend nginx)
 
 Optionally, you can also install:
 - grafana
 
-For authentication you need a valid TLS setup.
+### Setup
+In the following we assume `/opt/home-control/system-backend` to be the installation location and non-absolute paths will be assumed relative to this directory.
 
-We will assume that the Home Control is installed in /opt/home-control
+1. Unpack the release file to the installation directory.
+1. Create a Python virtual environment in the installation directory (it will be in a folder named venv)  
+   `python3 -m venv venv`.
+1. *Optional:* Activate the virtualenv by running `. venv/bin/activate`.
+   If you do this you can leave out the `./venv/bin/` in future commands.
+   The virtualenv can be deactivated with `deactivate` after you're done.   
+1. Install the required packages into the virtualenv  
+   `./venv/bin/pip install -r requirements.txt`.
+1. Create and setup a database (and database user) for Home Control. How to do that depends on your database server.
+1. Create a config file for Home Control (you can copy `config.example.py` to `config.py` for a quick start) and fill it out.
+   See [the configuration section](#Configuration) for more information.
+1. Initialize the database by running  
+   `./venv/bin/alembic upgrade head`.
+1. We recommend configuring your webserver to forward WebSocket connections to the location `/ws` to Home Control.
+   We provide a nginx configuration snippet for this in `examples/`.
+   To configure Home Control via the web interface you'll also need a working TLS setup so this is a good point to also configure your web server for it.
+1. Create one or more users. Users are necessary to add and configure things via the web interface.
+   `./venv/bin/python main.py add-user <USERNAME>`. While running the command will ask you for the user's password.
+1. Start Home Control by either:
+    - running `./venv/bin/python main.py run` in your terminal.
+    - installing and enabling the systemd unit file included in the `examples/` directory.
+1. *Optional:* Set up automatic database housekeeping.
+   It is used to aggregate data after a while and provide long term trends for your data.
+   Configure your system to run `./venv/bin/python main.py database-housekeeping` regularly, for example 4 times a day, by setting up a cronjob or installing the provided systemd timer unit in `examples/`.
 
-Unpack the release file to /opt/home-control/system-backend
+### Configuration
+The configuration file is a text file consisting of multiple lines. Lines starting with `#` are comments and will be ignored.
 
-Create a virtual env 
+- `SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"`
+  defines the connection your database.
+  See the [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/12/orm/tutorial.html#connecting) for information on what to use for your setup. 
+- `SECRET_KEY = "notreallyasecret-pleasedontuse"`
+  is the key used to sign the session cookie.
+  For production, you want to set this to a random string.
+  You can use `python3 -c 'import secrets; print(secrets.token_urlsafe())'` to generate suitable random string.
+- `LOCAL_NET = "A.B.C.D/E"`
+  allows a specific network given in CIDR notation to access Home Control features without being logged in.
+  This is optional and will disable local access permission if not set.
+- `MQTT_HOST = "1.2.3.4"`, `MQTT_USER = "username"`, `MQTT_PASS = "password"`
+  configure the connection to your MQTT server.
+- `BIND_IP = "127.0.0.1"`
+  sets the local address to use for incoming connections for websocket and grafana.
+  This is optional and will default to `127.0.0.1` if not set.
+- `TIMEZONE="UTC"`
+  defines the local time zone used for cron like timers.
+  This is optional and will default to `UTC` if not set. 
 
-`python3 -m venv venv`
+## Running a test environment
 
-install requirements 
-
-`./venv/bin/pip install -r requirements.txt`
-
-copy example config 
-
-`cp config.example.py config.py`
-
-and edit the variables in config according to description in it.
-
-You also need to initialize the database using.
-
-`./venv/bin/alembic upgrade head`
-This is the same command for updating.
-
-Then, you can create a user which is needed to configure things via the webinterface.
-
-`./venv/bin/python main.py add-user <USERNAME> [--display-name DISPLAY-NAME]`
-
-Now, you can run the Home Control System Backend with
-`./venv/bin/python main.py run`.
-
-We provide a systemd service file.
-
-You can call the Home Control Housekeeping with
-`./venv/bin/python main.py database-housekeeping`.
-See the files in `examples/` for information on how to run it regularly with a systemd timer unit.
-
+For testing/development on a local machine you will need a working TLS setup for user authentication to work in the frontend.
+This is needed as using cookies via a websocket only works in a "secure context".
+A self-signed certificate won't work as no major browser allows for HTTPS security exceptions on websocket connections.
+You can e.g., use `mkcert` to create a trusted certificate for your local machine.
+You can use the `examples/stunnel.conf` file with `stunnel` to terminate the TLS and pass it on to the 
+development webservers for the frontend, and the Home Control backend.
+For `stunnel` you need to combine the private and public keys of your certificate before it can be used.
 
 ## Writing rules
 You can write your own rules by creating a `local_rules.py` file in the installation directory.
@@ -86,10 +109,3 @@ There are three types of schedules:
 Timers can delete themselves by returning the string "DELETE".
 Each timer can only have one of the modes active at the same time (`at`, `interval`, and `cron` keyword arguments).
 Timers are stored in the database. They will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time.
-
-## Running a test environment
-
-For testing on a local machine you need a working TLS setup. This is needed for authentication since using cookies via a websocket requires it.
-You can e.g., use `mkcert` to create a trusted certificate for your local machine.
-You can use the `examples/stunnel.conf` file with `stunnel` to terminate the TLS and pass it on to the development webservers for the frontend and the Home Control backend.
-For `stunnel` you need to combine the private and public keys of your certificate before it can be used.

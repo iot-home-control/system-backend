@@ -1,5 +1,4 @@
 SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"
-SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Generate with secrets.token_urlsafe()
 SECRET_KEY = "notreallyasecret-pleasedontuse"
