@@ -5,12 +5,14 @@ Home Control is a no-cloud Internet of Things solution.
 Home Control has 3 Components
 - the System Backend (this repository)
 - the [Web Frontend](../frontend/README.md)
-- the firmware (to be releases)
+- the firmware (to be released)
 
 The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IoT).
 A received state is saved to a database and sent to all active web frontends via a web socket connection.
 The Backend provides also a Grafana data source.
 The system backend can collate the collected data into trends.
+
+The System Backend has support for rules and timers written in Python.
 
 ## Installation Guide
 ### Requirements
@@ -30,7 +32,7 @@ Optionally, you can also install:
 
 ### Setup
 In the following we assume all non-absolute paths will be relative to the installation directory.
-All our examples assume `/opt/home-control/system-backend` to be the installation location.
+In all our example configuration files we assume `/opt/home-control/system-backend` to be the installation location.
 
 1. Unpack the downloaded release file (or clone this repository)  to the installation directory.
 1. Create a Python virtual environment in the installation directory (it will be in a folder named venv)  
@@ -64,7 +66,7 @@ The configuration file is a text file consisting of multiple lines. Lines starti
 - `SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"`
   defines the connection your database.
   See the [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/12/orm/tutorial.html#connecting) for information on what to use for your setup.
-  For PostgreSQL, with a database named `home-control` and Home Control running as the user `home-control`, you can use `SQLALCHEMY_DATABASE_URI = "postgresql:///home-control"`.  
+  For PostgreSQL, with a database named `home-control` and Home Control running as the user `home-control`, you can use `SQLALCHEMY_DATABASE_URI = "postgresql://home-control:/home-control"`.
 - `SECRET_KEY = "notreallyasecret-pleasedontuse"`
   is the key used to sign the session cookie.
   For production, you want to set this to a random string.
@@ -82,7 +84,6 @@ The configuration file is a text file consisting of multiple lines. Lines starti
   This is optional and will default to `UTC` if not set. 
 
 ## Running a test environment
-
 For testing/development on a local machine you will need a working TLS setup for user authentication to work in the frontend.
 This is needed as using cookies via a websocket only works in a "secure context".
 A self-signed certificate won't work as no major browser allows for HTTPS security exceptions on websocket connections.
@@ -168,7 +169,7 @@ def init_timers():
     timer.add_timer("good night", switch_off_my_lamp, cron="30 22 * * Mon-Fri")
 ```
 
-Unfortunately, the light now switched off before we got to bed :(
+Unfortunately, the light now switched off before we got to bed.
 It would be nice if we could switch "My Lamp" on again, till we got really to bed.
 Therefore, we need another device.
 A "shelly button1" could be a good choice her, since it just sends only an event and has no state.
@@ -178,7 +179,7 @@ A "shelly button1" could be a good choice her, since it just sends only an event
   * type: "shellybutton"
   * device_id="shellybutton1-DEVICE_ID"
 
-```python 
+```python
 import datetime
 import config
 import dateutil
