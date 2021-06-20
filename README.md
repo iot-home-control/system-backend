@@ -5,9 +5,10 @@ Home Control is a no-cloud Internet of Things solution.
 Home Control has 3 Components
 - the System Backend (this repository)
 - the [Web Frontend](../frontend/README.md)
-- the firmware
+- the firmware (to be releases)
 
-The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IoT). A received state is saved to a database and sent to all active web frontends via a web socket connection.
+The System Backend connects to a Message Queue (MQTT) to get state messages of things (the T in IoT).
+A received state is saved to a database and sent to all active web frontends via a web socket connection.
 The Backend provides also a Grafana data source.
 The system backend can collate the collected data into trends.
 
@@ -17,8 +18,10 @@ Home Control is a Python project and as such should be able to run on most platf
 On your system you should install (or should have available on your network):
 - Python3 (at least Python 3.7)
 - Python-Virtualenv (python3-venv)
-- A database supported by SQLAlchemy which also supports the JSON datatype. 
-  We recommend PostgreSQL, MySQL should also work (but has not yet been tested).
+- PostgreSQL.  
+  MySQL might also work (you need to install a database driver manually. 
+  See [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/12/orm/tutorial.html#connecting).
+  However, we have not tested it.)
 - A MQTT message queue e.g., mosquitto
 - A webserver, which can handle websockets (we recommend nginx)
 
@@ -26,9 +29,10 @@ Optionally, you can also install:
 - grafana
 
 ### Setup
-In the following we assume `/opt/home-control/system-backend` to be the installation location and non-absolute paths will be assumed relative to this directory.
+In the following we assume all non-absolute paths will be relative to the installation directory.
+All our examples assume `/opt/home-control/system-backend` to be the installation location.
 
-1. Unpack the release file to the installation directory.
+1. Unpack the downloaded release file (or clone this repository)  to the installation directory.
 1. Create a Python virtual environment in the installation directory (it will be in a folder named venv)  
    `python3 -m venv venv`.
 1. *Optional:* Activate the virtualenv by running `. venv/bin/activate`.
@@ -36,7 +40,8 @@ In the following we assume `/opt/home-control/system-backend` to be the installa
    The virtualenv can be deactivated with `deactivate` after you're done.   
 1. Install the required packages into the virtualenv  
    `./venv/bin/pip install -r requirements.txt`.
-1. Create and setup a database (and database user) for Home Control. How to do that depends on your database server.
+1. Create an empty database (and a database user) for Home Control.
+   How to do that depends on your database server.
 1. Create a config file for Home Control (you can copy `config.example.py` to `config.py` for a quick start) and fill it out.
    See [the configuration section](#Configuration) for more information.
 1. Initialize the database by running  
@@ -58,7 +63,8 @@ The configuration file is a text file consisting of multiple lines. Lines starti
 
 - `SQLALCHEMY_DATABASE_URI = "driver://user:password@host/db"`
   defines the connection your database.
-  See the [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/12/orm/tutorial.html#connecting) for information on what to use for your setup. 
+  See the [SQLAlchemy documentation](https://docs.sqlalchemy.org/en/12/orm/tutorial.html#connecting) for information on what to use for your setup.
+  For PostgreSQL, with a database named `home-control` and Home Control running as the user `home-control`, you can use `SQLALCHEMY_DATABASE_URI = "postgresql:///home-control"`.  
 - `SECRET_KEY = "notreallyasecret-pleasedontuse"`
   is the key used to sign the session cookie.
   For production, you want to set this to a random string.
@@ -109,3 +115,82 @@ There are three types of schedules:
 Timers can delete themselves by returning the string "DELETE".
 Each timer can only have one of the modes active at the same time (`at`, `interval`, and `cron` keyword arguments).
 Timers are stored in the database. They will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time.
+
+### Examples
+
+**Switch on a lamp with a detached switch.**
+We have the following things:
+- the lamp:
+  * name: "My Lamp"
+  * type: "shelly"
+- the switch
+  * name: "My Switch"
+  * type: "switch"
+
+We want to switch on "My Lamp" based on the state off "My Switch".
+
+```python
+import shared
+from rules import Thing, rule, RuleEvent
+@rule("rule_switch_lamp_on_switch_event", Thing("switch", name="My Switch"))
+def switch_lamp_on_switch(event: RuleEvent):
+    db = shared.db_session_factory()
+    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+    if event.state.status_bool:
+       my_lamp.on()
+    else:
+        my_lamp.off()
+    db.close()
+```
+
+Wouldn't it be nice, if the "My Lamp" switches automatically off, when we go to bed.
+Let's use a cron based timer for it.
+
+First, we need a function which switches off "My Lamp". 
+
+```python
+import timer
+@rule("timer_switch_off_my_lamp")
+def switch_off_my_lamp(event):
+    db = shared.db_session_factory()
+    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+    my_lamp.off()
+    db.close()
+```
+
+Then, we have to define a timer, which switches off "My Lamp" at 22:30 from Mon to Fri.
+The timer is added with `timer.add_timer()`.
+We put this function call in a function named `init_timers()`.
+This ensures that the timer will be called by system backend.
+
+```python
+def init_timers():
+    timer.add_timer("good night", switch_off_my_lamp, cron="30 22 * * Mon-Fri")
+```
+
+Unfortunately, the light now switched off before we got to bed :(
+It would be nice if we could switch "My Lamp" on again, till we got really to bed.
+Therefore, we need another device.
+A "shelly button1" could be a good choice her, since it just sends only an event and has no state.
+
+- the "shelly button1"
+  * name: "Timed light switch"
+  * type: "shellybutton"
+  * device_id="shellybutton1-DEVICE_ID"
+
+```python 
+import datetime
+import config
+import dateutil
+
+tz = dateutil.tz.gettz(getattr(config, "TIMEZONE", "UTC"))
+@rule("rule_keep_the_lights_on", Thing("shellybutton", device_id="shellybutton1-DEVICE_ID"))
+def button_rule(event):
+    db = shared.db_session_factory()
+    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+    if event.state == "S":
+        my_lamp.on()
+        timer.add_timer("timer_switch_off_my_lamp", at=datetime.datetime.now(tz)+datetime.timedelta(minutes=5))
+    db.close()
+```
+
