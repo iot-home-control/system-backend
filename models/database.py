@@ -55,8 +55,8 @@ class Thing(Base):
     device_id = sa.Column(sa.String)
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
-    last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id))
-    views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic")
+    last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id).scalar_subquery())
+    views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic", back_populates="things")
 
     __mapper_args__ = {
         'polymorphic_on': type,
