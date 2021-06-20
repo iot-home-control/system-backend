@@ -195,3 +195,5 @@ def button_rule(event):
     db.close()
 ```
 
+## Licensing
+The Home-Control backend is licensed under the [GNU AGPL 3](LICENSE).
