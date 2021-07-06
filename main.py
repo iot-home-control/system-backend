@@ -120,6 +120,7 @@ def rule_executer_thread(queue):
                 db = shared.db_session_factory()
                 rulestate = db.query(RuleState).get(rules.all_rules[rule])
                 if rulestate and not rulestate.enabled:
+                    db.close()
                     continue
                 try:
                     if kind == "state":
