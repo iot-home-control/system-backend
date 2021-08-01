@@ -326,6 +326,31 @@ async def ws_authenticate(db, websocket, data, session):
         await websocket.send(json.dumps(dict(type="auth_failed")))
 
 
+@check_access(level=AccessLevel.Authenticated)
+async def send_rules(db, websocket, data):
+    # expected format of data
+    # {"rule_name": {enabled: True / False / Null}
+    if data.get("data"):
+        for rule_name, rule_state in data.get("data").items():  #todo: this is user defined content, we should be aware of this
+            if rule_state and rule_state.get("enabled") is not None:
+                current_rule_state = db.query(RuleState).get(rule_name)
+                if current_rule_state is not None:
+                    current_rule_state.enabled = rule_state.get("enabled")
+                    continue
+                current_rule_state = RuleState()
+                current_rule_state.id = rule_name
+                current_rule_state.enabled = rule_state.get("enabled")
+                db.add(current_rule_state)
+        db.commit()
+
+    all_rules = []
+    for rule in rules.all_rules.values():
+        rule_state = db.query(RuleState).get(rule)
+        enabled = rule_state.enabled if rule_state else None
+        all_rules.append({"name": rule, "state": enabled})
+    await websocket.send(json.dumps(dict(type="rules", value=all_rules)))
+
+
 async def handle_ws_connection(websocket, path):
     wslog.info("Client {} connected".format(websocket.remote_address))
     cookie_header = websocket.request_headers.get("Cookie", "")
@@ -396,6 +421,8 @@ async def handle_ws_connection(websocket, path):
                 await ws_type_edit_save(db, websocket, data)
             elif msg_type == "authenticate":
                 await ws_authenticate(db, websocket, data, session)
+            elif msg_type == "rules":
+                await send_rules(db, websocket, data)
             else:
                 wslog.warning("Unknown msg_type {}".format(msg_type))
             db.close()
