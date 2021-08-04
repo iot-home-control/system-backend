@@ -45,7 +45,7 @@ import mq
 import rules
 import shared
 import timer
-from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User
+from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User, Timer
 
 try:
     import local_rules
@@ -607,6 +607,9 @@ def main():
 
     grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
     print("Grafana API")
+    with shared.db_session_factory() as db:
+        db.query(Timer).filter(Timer.auto_delete == True).delete()
+        db.commit()
 
     rules.init_timers()
     # local timers

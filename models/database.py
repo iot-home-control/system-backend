@@ -177,6 +177,7 @@ class Timer(Base):
     schedule = sa.Column(sa.DateTime(timezone=True), nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
     data = sa.Column(MutableDict.as_mutable(sa.JSON), nullable=False, default=lambda: {})
+    auto_delete = sa.Column(sa.Boolean)
 
 
 class ThingView(Base):

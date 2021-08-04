@@ -49,7 +49,7 @@ def timer(func):
     return func
 
 
-def add_timer(timer_id, func, at=None, interval=None, cron=None):
+def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=None):
     if at and interval and cron:
         raise RuntimeError("Time at, interval and cron are not supported at the same time")
     func_name = func.__name__
@@ -58,7 +58,7 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None):
     db = shared.db_session_factory()
     timer = db.query(Timer).filter_by(id=timer_id).one_or_none()
 
-    def set_timer_timing(timer, at, interval, cron):
+    def set_timer_timing(timer):
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         nowtz = datetime.datetime.now(tz=tz)
         if at:
@@ -73,19 +73,36 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None):
             timer.schedule = now + interval
             timer.data["__interval__"] = interval.total_seconds()
         else:
+            db.close()
             raise RuntimeError("Timer is neither at, interval nor cron")
+
+    """Default behaviour of auto_delete
+    at: auto_delete=False i.e. they will be executed after a reboot
+    cron: auto_delete=True
+    interval: auto_delete=True
+    Nonetheless, the default behaviour can be overwritten be setting auto_delete explicitly
+    """
+    def set_auto_delete(timer):
+        if auto_delete is not None:
+            timer.auto_delete = auto_delete
+        elif at:
+            timer.auto_delete = False
+        else:
+            timer.auto_delete = True
 
     if not timer:
         timer = Timer()
         timer.id = timer_id
         timer.function_id = func_hash
         timer.data = dict()
-        set_timer_timing(timer, at, interval, cron)
+        set_auto_delete(timer)
+        set_timer_timing(timer)
         db.add(timer)
         db.commit()
     else:
         timer.function_id = func_hash
-        set_timer_timing(timer, at, interval, cron)
+        set_auto_delete(timer)
+        set_timer_timing(timer)
         db.commit()
     db.close()
 
