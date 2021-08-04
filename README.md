@@ -106,7 +106,7 @@ A rule is a function with the `@rule` decorator applied. The rule decorator take
 The decorator also takes any number of `Thing` descriptor objects as positional arguments after the identifier. All keyword arguments are also passed to the called function.
 Please also note that the `Thing` descriptor object for rules is different from the `Thing` objects that are stored in the database, they must be resolved first into the latter.
 
-Timers are function which are called based on a schedule. A function becomes a timer when it is passed as the function argument to the `timer.add_timer` function.
+Timers are function which are called based on a schedule. A function becomes a timer when it has the `@timer` decorator applied and is passed as the function argument to the `timer.add_timer` function.
 You must also pass a unique timer id as the first argument.
 There are three types of schedules:
 - Cron (following a set schedule)
@@ -151,6 +151,7 @@ First, we need a function which switches off "My Lamp".
 
 ```python
 import timer
+@timer.timer
 @rule("timer_switch_off_my_lamp")
 def switch_off_my_lamp(event):
     db = shared.db_session_factory()
@@ -163,6 +164,7 @@ Then, we have to define a timer, which switches off "My Lamp" at 22:30 from Mon 
 The timer is added with `timer.add_timer()`.
 We put this function call in a function named `init_timers()`.
 This ensures that the timer will be called by system backend.
+To make sure we can add it as the timer function in the next step we'll also need to add the `@timer.timer` decorator to the function as well.
 
 ```python
 def init_timers():
@@ -191,7 +193,7 @@ def button_rule(event):
     my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
     if event.state == "S":
         my_lamp.on()
-        timer.add_timer("timer_switch_off_my_lamp", at=datetime.datetime.now(tz)+datetime.timedelta(minutes=5))
+        timer.add_timer("timer_switch_off_my_lamp", switch_off_my_lamp, at=datetime.datetime.now(tz)+datetime.timedelta(minutes=5))
     db.close()
 ```
 

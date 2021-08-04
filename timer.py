@@ -42,12 +42,19 @@ def fnv1a(xs):
     return h
 
 
+def timer(func):
+    func_name = func.__name__
+    func_hash = str(fnv1a(func_name.encode()))
+    _functions[func_hash] = func
+    return func
+
+
 def add_timer(timer_id, func, at=None, interval=None, cron=None):
     if at and interval and cron:
         raise RuntimeError("Time at, interval and cron are not supported at the same time")
     func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
-    _functions[func_hash] = func
+    assert func_hash in _functions, f"{func_name} must be a registered timer function (have the @timer decorator) in order to be used with add_timer"
     db = shared.db_session_factory()
     timer = db.query(Timer).filter_by(id=timer_id).one_or_none()
 
