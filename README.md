@@ -115,7 +115,12 @@ There are three types of schedules:
 
 Timers can delete themselves by returning the string "DELETE".
 Each timer can only have one of the modes active at the same time (`at`, `interval`, and `cron` keyword arguments).
-Timers are stored in the database. They will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time.
+Timers are stored in the database.
+After a restart timers with `interval` and `cron` keyword arguments are deleted to prevent from getting stale if their registrations (`add_timer` calls) have been deleted from source code.
+You can prevent automatic deletion of `interval` and `cron` timers by explicitly setting the `auto_delete` keyword argument to `True` when calling `add_timer`.
+Timers with `at` will be kept after a restart as they default to `False` for the `auto_delete` keyword argument.
+
+Timers with `at` schedule will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time unless `auto_delete` was set to `True` in `add_timer`.
 
 ### Examples
 
