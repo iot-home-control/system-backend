@@ -617,10 +617,9 @@ def main():
     except AttributeError:  # no function
         pass
 
-    db = shared.db_session_factory()
-    for thing in db.query(Thing).all():
-        thing.last_state(db)
-    db.close()
+    with shared.db_session_factory() as db:
+        for thing in db.query(Thing).all():
+            thing.last_state(db)
 
     try:
         while not request_shutdown:

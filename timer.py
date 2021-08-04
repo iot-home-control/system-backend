@@ -84,25 +84,23 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None):
 
 
 def process_timers():
-    db = shared.db_session_factory()
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
-    nowtz = datetime.datetime.now(tz=tz)
-    todo = db.query(Timer).filter(Timer.schedule < now).all()
-    for timer in todo:
-        if timer.function_id not in _functions:
-            logger.warning("Timer '{}' has specifies function_id '{}' which is unknown".format(timer.id, timer.function_id))
-            logger.warning("Known timers: {}".format(pformat(_functions)))
-            continue
-        timer_res = _functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None))
-        if isinstance(timer, str) and timer_res == "DELETE":
-            db.delete(timer)
-        elif "__cron__" in timer.data:
-            timer.schedule = croniter.croniter(timer.data["__cron__"], nowtz).get_next(ret_type=datetime.datetime)
-            logger.info("Scheduled timer '{}' next at at {}".format(timer.id, timer.schedule))
-        elif "__interval__" in timer.data:
-            timer.schedule += datetime.timedelta(seconds=timer.data["__interval__"])
-        else:
-            db.delete(timer)
-        db.commit()
-
-    db.close()
+    with shared.db_session_factory() as db:
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        nowtz = datetime.datetime.now(tz=tz)
+        todo = db.query(Timer).filter(Timer.schedule < now).all()
+        for timer in todo:
+            if timer.function_id not in _functions:
+                logger.warning("Timer '{}' has specifies function_id '{}' which is unknown".format(timer.id, timer.function_id))
+                logger.warning("Known timers: {}".format(pformat(_functions)))
+                continue
+            timer_res = _functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None))
+            if isinstance(timer, str) and timer_res == "DELETE":
+                db.delete(timer)
+            elif "__cron__" in timer.data:
+                timer.schedule = croniter.croniter(timer.data["__cron__"], nowtz).get_next(ret_type=datetime.datetime)
+                logger.info("Scheduled timer '{}' next at at {}".format(timer.id, timer.schedule))
+            elif "__interval__" in timer.data:
+                timer.schedule += datetime.timedelta(seconds=timer.data["__interval__"])
+            else:
+                db.delete(timer)
+            db.commit()
