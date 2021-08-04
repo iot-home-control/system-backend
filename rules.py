@@ -19,6 +19,7 @@ import timer
 import datetime
 import shared
 from enum import Enum
+import functools
 
 all_rules = {}
 triggers = {}
@@ -57,6 +58,7 @@ class EventSource(Enum):
 
 def rule(name, *trigger, **params):
     def wrapper(func):
+        @functools.wraps(func)
         def decorator(event, **kwargs):
             all_args = kwargs.copy()
             all_args.update(params)

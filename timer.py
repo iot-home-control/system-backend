@@ -45,7 +45,7 @@ def fnv1a(xs):
 def add_timer(timer_id, func, at=None, interval=None, cron=None):
     if at and interval and cron:
         raise RuntimeError("Time at, interval and cron are not supported at the same time")
-    func_name = func.__code__.co_name
+    func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
     _functions[func_hash] = func
     db = shared.db_session_factory()
