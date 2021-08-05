@@ -198,6 +198,7 @@ class RuleState(Base):
     __tablename__ = "rule_state"
     id = sa.Column(sa.String, primary_key=True)
     enabled = sa.Column(sa.Boolean, default=True)
+    data = sa.Column(sa.JSON)
 
 
 class Trend(Base):
