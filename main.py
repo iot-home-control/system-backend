@@ -204,16 +204,14 @@ async def ws_type_command(db, websocket, data):
         wslog.warning("Thing {} is unknown".format(thing_id))
         return
     if thing.type in ['switch', 'shelly']:
-        sw = db.query(Thing).get(thing_id)
         val = data.get("value")
         if val:
-            sw.on()
+            thing.on()
         else:
-            sw.off()
-    if thing.type in ["shellytrv"]:
-        valve = db.query(Thing).get(thing_id)
+            thing.off()
+    elif thing.type in ["shellytrv"]:
         val = data.get("value")
-        valve.send_value(val)
+        thing.send_value(val)
     else:
         wslog.warning("Unsupported type for command: '{}'".format(thing.type))
 

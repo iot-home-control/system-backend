@@ -197,11 +197,11 @@ class ShellyTRV(Thing):
 
     def get_base_topic(self):
         return "shellies/{device_id}/thermostat/{vnode_id}/command/".format(type=self.type,
-                                                                                    device_id=self.device_id,
-                                                                                    vnode_id=self.vnode_id)
+                                                                            device_id=self.device_id,
+                                                                            vnode_id=self.vnode_id)
 
     def get_action_topic(self):
-        return "f{self.get_base_topic()}/target_t"
+        return f"{self.get_base_topic()}/target_t"
 
     def send_external_temperature(self, value):
         mq.publish(f"{self.get_base_topic()}/ext_t", value)
@@ -214,9 +214,9 @@ class ShellyTRV(Thing):
         LastSeen.update_last_seen(db, self.device_id)
         try:
             data = json.loads(state)
-        except json.JSONDecodeError:
-            ...
-        state = data.get("thermostats")[self.vnode_id].get("target_t").get("value")
+            state = data.get("thermostats")[self.vnode_id].get("target_t").get("value")
+        except (json.JSONDecodeError, IndexError):
+            state = None
         return super().process_status(db, f"unknown, {state}")
 
     @classmethod
