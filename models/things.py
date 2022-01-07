@@ -184,6 +184,46 @@ class ShellyHumidity(HumiditySensor):
         return 'Shelly Humidity'
 
 
+class ShellyTRV(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shellytrv'
+    }
+
+    def get_data_type(self):
+        return DataType.Float
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/info".format(type=self.type, device_id=self.device_id, vnode_id=self.vnode_id)
+
+    def get_base_topic(self):
+        return "shellies/{device_id}/thermostat/{vnode_id}/command/".format(type=self.type,
+                                                                                    device_id=self.device_id,
+                                                                                    vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return "f{self.get_base_topic()}/target_t"
+
+    def send_external_temperature(self, value):
+        mq.publish(f"{self.get_base_topic()}/ext_t", value)
+
+    def send_value(self, value):
+        # Todo: clamp values if needed
+        mq.publish(self.get_action_topic(), value)
+
+    def process_status(self, db, state):
+        LastSeen.update_last_seen(db, self.device_id)
+        try:
+            data = json.loads(state)
+        except json.JSONDecodeError:
+            ...
+        state = data.get("thermostats")[self.vnode_id].get("target_t").get("value")
+        return super().process_status(db, f"unknown, {state}")
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly TRV'
+
+
 class ShellyButton(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'shellybutton'
@@ -247,6 +287,7 @@ thing_type_table = {
     "shelly": Shelly,
     "pressure": PressureSensor,
     "shellybutton": ShellyButton,
+    "shellytrv": ShellyTRV,
     "shelly_temperature": ShellyTemperature,
     "shelly_humidity": ShellyHumidity,
     "frischluftworks-co2": FrischluftWorksCO2Sensor,

@@ -210,6 +210,10 @@ async def ws_type_command(db, websocket, data):
             sw.on()
         else:
             sw.off()
+    if thing.type in ["shellytrv"]:
+        valve = db.query(Thing).get(thing_id)
+        val = data.get("value")
+        valve.send_value(val)
     else:
         wslog.warning("Unsupported type for command: '{}'".format(thing.type))
 
@@ -496,6 +500,9 @@ def on_mqtt_message(client, userdata, message):
                 device_id = vnode
                 vnode_id = stop.split("/")[-1]
                 node_type = "shelly"
+                if vnode.startswith("shellytrv"):
+                    node_type = "shellytrv"
+                    vnode_id = 0
                 if vnode.startswith("shellybutton1"):
                     node_type = "shellybutton"
                 if stop.split("/")[0] == "ext_temperature":
