@@ -116,6 +116,10 @@ class Thing(Base):
         return self.id, type(self), "state", state.id
 
     @staticmethod
+    def get_mqtt_subscriptions():
+        return tuple()
+
+    @staticmethod
     def get_by_type_and_device_id(db, node_type, device_id, vnode_id):
         from models.things import thing_type_table
         cls = thing_type_table.get(node_type)

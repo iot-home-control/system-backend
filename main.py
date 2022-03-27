@@ -74,6 +74,54 @@ sessions = dict()
 
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
+mqtt_topics = {}
+
+
+def register_mqtt_topic(pattern, cls):
+    cur = mqtt_topics
+    last = None
+    parts = pattern.split('/')
+    for i, part in enumerate(parts):
+        if "+" in cur and part != "+":
+            raise ValueError(f"Can't register {cls} with pattern {pattern}: Can't end with +.")
+        elif i+1 >= len(parts):
+            last = part
+        else:
+            cur.setdefault(part, dict())
+            cur = cur[part]
+    if last in cur and cur[last] != cls:
+        raise ValueError(f"Can't register {cls} with pattern {pattern}: Already registered on {cur[last]}.")
+    cur[last] = cls
+
+
+def register_mqtt_topics():
+    for name, cls in models.things.thing_type_table.items():
+        if not getattr(cls, 'get_mqtt_subscriptions'):
+            continue
+        try:
+            topics = cls.get_mqtt_subscriptions()
+            if not isinstance(topics, tuple):
+                mqttlog.warning(f"{cls}.get_mqtt_subscriptions didn't return a tuple but {type(topics)}.")
+                continue
+            for topic in topics:
+                register_mqtt_topic(topic, cls)
+        except ValueError as e:
+            mqttlog.exception(e)
+
+
+def get_mqtt_topics():
+    ts = []
+
+    def get_topic(cur, t):
+        if not isinstance(cur, dict):
+            ts.append("/".join(t))
+        else:
+            for key, value in cur.items():
+                get_topic(value, t + [key])
+
+    get_topic(mqtt_topics, [])
+    return ts
+
 
 class AccessLevel(enum.IntEnum):
     Unauthenticated = 0
@@ -472,9 +520,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         return
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
-        db = shared.db_session_factory()
-        ts = [thing.get_state_topic() for thing in db.query(Thing).all()] + ["alive"]
-        db.close()
+        ts = get_mqtt_topics()
         client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
@@ -596,6 +642,7 @@ def main():
 
     print("Starting:", end=" ")
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+    register_mqtt_topics()
     print("MQTT", end=", ")
 
     rule_executor = threading.Thread(target=rule_executer_thread, args=(rule_queue,))

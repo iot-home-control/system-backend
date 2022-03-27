@@ -29,6 +29,10 @@ class TemperatureSensor(Thing):
     def display_name(cls):
         return 'Temperature Sensor'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'temperature/+/state',
+
 
 class HumiditySensor(Thing):
     __mapper_args__ = {
@@ -41,6 +45,10 @@ class HumiditySensor(Thing):
     @classmethod
     def display_name(cls):
         return 'Humidity Sensor'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'humidity/+/state',
 
 
 class PressureSensor(Thing):
@@ -55,6 +63,10 @@ class PressureSensor(Thing):
     def display_name(cls):
         return 'Pressure Sensor'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'pressure/+/state',
+
 
 class SoilMoistureSensor(Thing):
     __mapper_args__ = {
@@ -67,6 +79,10 @@ class SoilMoistureSensor(Thing):
     @classmethod
     def display_name(cls):
         return 'Soil Moisture Sensor'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'soilmoisture/+/state',
 
 
 class LEDs(Thing):
@@ -99,6 +115,10 @@ class Switch(Thing):
     @classmethod
     def display_name(cls):
         return 'Switch'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'switch/+/state',
 
 
 class Button(Thing):
@@ -139,6 +159,10 @@ class Shelly(Switch):
     def display_name(cls):
         return 'Shelly'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/relay/+',
+
 
 class ShellyTemperature(TemperatureSensor):
     __mapper_args__ = {
@@ -161,6 +185,10 @@ class ShellyTemperature(TemperatureSensor):
     def display_name(cls):
         return 'Shelly Temperature'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/ext_temperature/+',
+
 
 class ShellyHumidity(HumiditySensor):
     __mapper_args__ = {
@@ -182,6 +210,10 @@ class ShellyHumidity(HumiditySensor):
     @classmethod
     def display_name(cls):
         return 'Shelly Humidity'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/ext_humidity/+',
 
 
 class ShellyTRV(Thing):
@@ -223,6 +255,10 @@ class ShellyTRV(Thing):
     def display_name(cls):
         return 'Shelly TRV'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/info',
+
 
 class ShellyButton(Thing):
     __mapper_args__ = {
@@ -251,6 +287,10 @@ class ShellyButton(Thing):
     def display_name(cls):
         return 'Shelly Button'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/input_event/+',
+
 
 class FrischluftWorksCO2Sensor(Thing):
     __mapper_args__ = {
@@ -275,6 +315,10 @@ class FrischluftWorksCO2Sensor(Thing):
     @classmethod
     def display_name(cls):
         return "frischluft.works CO₂ Sensor"
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'FRISCHLUFT/+/values/raw/co2',
 
 
 thing_type_table = {
