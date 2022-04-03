@@ -17,6 +17,8 @@ from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.ext.mutable import MutableDict
 from enum import Enum
 import datetime
+import typing as T
+
 
 Base = declarative_base()
 
@@ -91,7 +93,7 @@ class Thing(Base):
     def get_data_type(self):
         raise NotImplemented()
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         reason, value = state.split(",", maxsplit=1)
 
         state = State()
@@ -128,6 +130,13 @@ class Thing(Base):
         thing = db.query(cls).filter_by(type=node_type, device_id=device_id,
                                         vnode_id=vnode_id).one_or_none()
         return thing
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # type / node-vnode / state
+        node_type = topic[0]
+        device_id, vnode_id = topic[1].rsplit('-', maxsplit=1)
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
     @staticmethod
     def get(db, thing_type, name=None, id=None, device_id=None, vnode_id=None):
