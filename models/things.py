@@ -15,6 +15,7 @@
 import mq
 import json
 from models.database import Thing, DataType, LastSeen
+import typing as T
 
 
 class TemperatureSensor(Thing):
@@ -29,6 +30,10 @@ class TemperatureSensor(Thing):
     def display_name(cls):
         return 'Temperature Sensor'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'temperature/+/state',
+
 
 class HumiditySensor(Thing):
     __mapper_args__ = {
@@ -41,6 +46,10 @@ class HumiditySensor(Thing):
     @classmethod
     def display_name(cls):
         return 'Humidity Sensor'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'humidity/+/state',
 
 
 class PressureSensor(Thing):
@@ -55,6 +64,10 @@ class PressureSensor(Thing):
     def display_name(cls):
         return 'Pressure Sensor'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'pressure/+/state',
+
 
 class SoilMoistureSensor(Thing):
     __mapper_args__ = {
@@ -67,6 +80,10 @@ class SoilMoistureSensor(Thing):
     @classmethod
     def display_name(cls):
         return 'Soil Moisture Sensor'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'soilmoisture/+/state',
 
 
 class LEDs(Thing):
@@ -100,6 +117,10 @@ class Switch(Thing):
     def display_name(cls):
         return 'Switch'
 
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'switch/+/state',
+
 
 class Button(Thing):
     __mapper_args__ = {
@@ -127,17 +148,29 @@ class Shelly(Switch):
         return "shellies/{device_id}/relay/{vnode_id}/command".format(type=self.type, device_id=self.device_id,
                                                                       vnode_id=self.vnode_id)
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         last_state = self.last_state(db)
         LastSeen.update_last_seen(db, self.device_id)
         if last_state is None or last_state.status_bool != (state.lower() in ["on", "yes", "true", "1"]):
             state = f"unknown,{state}"
-            return super().process_status(db, state)
+            return super().process_status(db, state, data)
         return self.id, type(self), "state", last_state.id
 
     @classmethod
     def display_name(cls):
         return 'Shelly'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/relay/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / relay / vnode
+        node_type = 'shelly'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class ShellyTemperature(TemperatureSensor):
@@ -152,14 +185,26 @@ class ShellyTemperature(TemperatureSensor):
     def get_action_topic(self):
         return None
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         LastSeen.update_last_seen(db, self.device_id)
         state = f"unknown,{state}"
-        return super().process_status(db, state)
+        return super().process_status(db, state, data)
 
     @classmethod
     def display_name(cls):
         return 'Shelly Temperature'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/ext_temperature/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / ext_temperature / vnode
+        node_type = 'shelly_temperature'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class ShellyHumidity(HumiditySensor):
@@ -174,14 +219,26 @@ class ShellyHumidity(HumiditySensor):
     def get_action_topic(self):
         return None
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         LastSeen.update_last_seen(db, self.device_id)
         state = f"unknown,{state}"
-        return super().process_status(db, state)
+        return super().process_status(db, state, data)
 
     @classmethod
     def display_name(cls):
         return 'Shelly Humidity'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/ext_humidity/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / ext_humidity / vnode
+        node_type = 'shelly_humidity'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class ShellyTRV(Thing):
@@ -210,18 +267,30 @@ class ShellyTRV(Thing):
         # Todo: clamp values if needed
         mq.publish(self.get_action_topic(), value)
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         LastSeen.update_last_seen(db, self.device_id)
         try:
             data = json.loads(state)
             state = data.get("thermostats")[self.vnode_id].get("target_t").get("value")
         except (json.JSONDecodeError, IndexError):
             state = None
-        return super().process_status(db, f"unknown, {state}")
+        return super().process_status(db, f"unknown, {state}", data)
 
     @classmethod
     def display_name(cls):
         return 'Shelly TRV'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/info',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / info
+        node_type = 'shellytrv'
+        device_id = topic[1]
+        vnode_id = 0
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class ShellyButton(Thing):
@@ -239,7 +308,7 @@ class ShellyButton(Thing):
     def get_action_topic(self):
         return None
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         try:
             data = json.loads(state)
         except json.JSONDecodeError:
@@ -250,6 +319,18 @@ class ShellyButton(Thing):
     @classmethod
     def display_name(cls):
         return 'Shelly Button'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/input_event/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / input_event / vnode
+        node_type = 'shellybutton'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class FrischluftWorksCO2Sensor(Thing):
@@ -267,14 +348,26 @@ class FrischluftWorksCO2Sensor(Thing):
     def get_action_topic(self):
         return None
 
-    def process_status(self, db, state):
+    def process_status(self, db, state, data):
         LastSeen.update_last_seen(db, self.device_id)
         state = f"local,{state}"
-        return super().process_status(db, state)
+        return super().process_status(db, state, data)
 
     @classmethod
     def display_name(cls):
         return "frischluft.works CO₂ Sensor"
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'FRISCHLUFT/+/values/raw/co2',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # FRISCHLUFT / node / values / raw / co2
+        node_type = 'frischluftworks-co2'
+        device_id = topic[1]
+        vnode_id = 0
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 thing_type_table = {

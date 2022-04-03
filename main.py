@@ -46,6 +46,7 @@ import rules
 import shared
 import timer
 from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User, Timer
+import typing as T
 
 try:
     import local_rules
@@ -73,6 +74,63 @@ connected_wss = set()
 sessions = dict()
 
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
+
+mqtt_topics = {}
+
+
+def register_mqtt_topic(pattern, cls):
+    cur = mqtt_topics
+    last = None
+    parts = pattern.split('/')
+    for i, part in enumerate(parts):
+        if "+" in cur and part != "+":
+            raise ValueError(f"Can't register {cls} with pattern {pattern}: Can't end with +.")
+        elif i+1 >= len(parts):
+            last = part
+        else:
+            cur.setdefault(part, dict())
+            cur = cur[part]
+    if last in cur and cur[last] != cls:
+        raise ValueError(f"Can't register {cls} with pattern {pattern}: Already registered on {cur[last]}.")
+    cur[last] = cls
+
+
+def register_mqtt_topics():
+    for name, cls in models.things.thing_type_table.items():
+        if not getattr(cls, 'get_mqtt_subscriptions'):
+            continue
+        try:
+            topics = cls.get_mqtt_subscriptions()
+            if not isinstance(topics, tuple):
+                mqttlog.warning(f"{cls}.get_mqtt_subscriptions didn't return a tuple but {type(topics)}.")
+                continue
+            for topic in topics:
+                register_mqtt_topic(topic, cls)
+        except ValueError as e:
+            mqttlog.exception(e)
+
+
+def get_mqtt_topics():
+    ts = []
+
+    def get_topic(cur, t):
+        if not isinstance(cur, dict):
+            ts.append("/".join(t))
+        else:
+            for key, value in cur.items():
+                get_topic(value, t + [key])
+
+    get_topic(mqtt_topics, [])
+    return ts
+
+
+def get_thing_cls(mqtt_topic: T.List[str]):
+    cur: T.Optional[dict] = mqtt_topics
+    for level in mqtt_topic:
+        cur = cur.get(level, cur.get('+', None))
+        if cur is None:
+            return None
+    return cur
 
 
 class AccessLevel(enum.IntEnum):
@@ -472,9 +530,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         return
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
-        db = shared.db_session_factory()
-        ts = [thing.get_state_topic() for thing in db.query(Thing).all()] + ["alive"]
-        db.close()
+        ts = get_mqtt_topics() + ["alive"]
         client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
@@ -493,32 +549,15 @@ def on_mqtt_message(client, userdata, message):
             device_id = message.payload.decode("ascii")
             LastSeen.update_last_seen(db, device_id)
         else:
-            node_type, vnode, stop = message.topic.split("/", maxsplit=2)
-            if node_type == "shellies":
-                device_id = vnode
-                vnode_id = stop.split("/")[-1]
-                node_type = "shelly"
-                if vnode.startswith("shellytrv"):
-                    node_type = "shellytrv"
-                    vnode_id = 0
-                if vnode.startswith("shellybutton1"):
-                    node_type = "shellybutton"
-                if stop.split("/")[0] == "ext_temperature":
-                    print("found shelly_temperature")
-                    node_type = "shelly_temperature"
-                if stop.split("/")[0] == "ext_humidity":
-                    node_type = "shelly_humidity"
-            elif node_type == "FRISCHLUFT":
-                device_id = vnode
-                vnode_id = "0"
-                node_type = "frischluftworks-co2"
-            else:
-                device_id, vnode_id = vnode.rsplit('-', maxsplit=1)
-            thing = Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id)
+            split_topic = message.topic.split("/")
+            thing_cls = get_thing_cls(split_topic)
+            if thing_cls is None:
+                return
+            thing, data = thing_cls.get_by_mqtt_topic(db, split_topic)
             if not thing:
                 return
             print("Thing {} {} sent new state".format(thing.type, thing.name))
-            res = thing.process_status(db, message.payload.decode("ascii"))
+            res = thing.process_status(db, message.payload.decode("ascii"), data)
             if res[2] == "state":
                 msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
                 asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
@@ -596,6 +635,7 @@ def main():
 
     print("Starting:", end=" ")
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+    register_mqtt_topics()
     print("MQTT", end=", ")
 
     rule_executor = threading.Thread(target=rule_executer_thread, args=(rule_queue,))
