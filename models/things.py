@@ -241,6 +241,82 @@ class ShellyHumidity(HumiditySensor):
         return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
+class ShellyPower(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shelly_power'
+    }
+
+    def get_data_type(self):
+        return DataType.Float
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/emeter/{vnode_id}/power".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state, data):
+        LastSeen.update_last_seen(db, self.device_id)
+        state = f"unknown,{state}"
+        return super().process_status(db, state, data)
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Power'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/emeter/+/power', 'shellies/+/relay/+/power',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / emeter / vnode / function
+        node_type = 'shelly_power'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        function = topic[4]
+
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+
+class ShellyEnergy(Thing):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shelly_energy'
+    }
+
+    def get_data_type(self):
+        return DataType.Float
+
+    def get_state_topic(self):
+        return "shellies/{device_id}/emeter/{vnode_id}/total".format(type=self.type, device_id=self.device_id,
+                                                              vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state, data):
+        LastSeen.update_last_seen(db, self.device_id)
+        state = f"unknown,{state}"
+        return super().process_status(db, state, data)
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Energy'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'shellies/+/emeter/+/total', 'shellies/+/relay/+/energy',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellies / node / emeter / vnode / function
+        node_type = 'shelly_energy'
+        device_id = topic[1]
+        vnode_id = topic[3]
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+
 class ShellyTRV(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'shellytrv'
@@ -381,6 +457,8 @@ thing_type_table = {
     "pressure": PressureSensor,
     "shellybutton": ShellyButton,
     "shellytrv": ShellyTRV,
+    "shelly_power": ShellyPower,
+    "shelly_energy": ShellyEnergy,
     "shelly_temperature": ShellyTemperature,
     "shelly_humidity": ShellyHumidity,
     "frischluftworks-co2": FrischluftWorksCO2Sensor,
