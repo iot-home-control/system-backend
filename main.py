@@ -76,23 +76,19 @@ sessions = dict()
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
 mqtt_topics = {}
+TOPIC_LEAF = "<LEAF>"
 
 
 def register_mqtt_topic(pattern, cls):
     cur = mqtt_topics
-    last = None
     parts = pattern.split('/')
     for i, part in enumerate(parts):
-        if "+" in cur and part != "+":
-            raise ValueError(f"Can't register {cls} with pattern {pattern}: Can't end with +.")
-        elif i+1 >= len(parts):
-            last = part
-        else:
-            cur.setdefault(part, dict())
-            cur = cur[part]
-    if last in cur and cur[last] != cls:
-        raise ValueError(f"Can't register {cls} with pattern {pattern}: Already registered on {cur[last]}.")
-    cur[last] = cls
+        cur.setdefault(part, dict())
+        cur = cur[part]
+        if i+1 >= len(parts):
+            if TOPIC_LEAF in cur:
+                raise ValueError(f"Can't register {cls} with pattern {pattern}: Already registered on {cur[TOPIC_LEAF]}.")
+            cur[TOPIC_LEAF] = cls
 
 
 def register_mqtt_topics():
@@ -118,7 +114,10 @@ def get_mqtt_topics():
             ts.append("/".join(t))
         else:
             for key, value in cur.items():
-                get_topic(value, t + [key])
+                if key == TOPIC_LEAF:
+                    get_topic(value, t)
+                else:
+                    get_topic(value, t + [key])
 
     get_topic(mqtt_topics, [])
     return ts
@@ -127,10 +126,10 @@ def get_mqtt_topics():
 def get_thing_cls(mqtt_topic: T.List[str]):
     cur: T.Optional[dict] = mqtt_topics
     for level in mqtt_topic:
-        cur = cur.get(level, cur.get('+', None))
+        cur = cur.get(level, cur.get("+", None))
         if cur is None:
             return None
-    return cur
+    return cur.get(TOPIC_LEAF)
 
 
 class AccessLevel(enum.IntEnum):
