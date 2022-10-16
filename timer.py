@@ -55,8 +55,6 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
     func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
     assert func_hash in _functions, f"{func_name} must be a registered timer function (have the @timer decorator) in order to be used with add_timer"
-    db = shared.db_session_factory()
-    timer = db.query(Timer).filter_by(id=timer_id).one_or_none()
 
     def set_timer_timing(timer):
         now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -73,7 +71,6 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
             timer.schedule = now + interval
             timer.data["__interval__"] = interval.total_seconds()
         else:
-            db.close()
             raise RuntimeError("Timer is neither at, interval nor cron")
 
     """Default behaviour of auto_delete
@@ -90,21 +87,19 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
         else:
             timer.auto_delete = True
 
-    if not timer:
-        timer = Timer()
-        timer.id = timer_id
+    with shared.db_session_factory() as db:
+        timer = db.query(Timer).filter_by(id=timer_id).one_or_none()
+
+        if not timer:
+            timer = Timer()
+            timer.id = timer_id
+            timer.data = dict()
+            db.add(timer)
+
         timer.function_id = func_hash
-        timer.data = dict()
         set_auto_delete(timer)
         set_timer_timing(timer)
-        db.add(timer)
         db.commit()
-    else:
-        timer.function_id = func_hash
-        set_auto_delete(timer)
-        set_timer_timing(timer)
-        db.commit()
-    db.close()
 
 
 def process_timers():

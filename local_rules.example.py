@@ -26,22 +26,20 @@ from models.database import RuleState
 @rule("Button Rule", Thing("shellybutton", device_id="shellybutton1-DEVICE_ID"))
 def button_rule(event):
     # Create a database connection
-    db = shared.db_session_factory()
-    if event.state == "S":
-        # Get RuleState of rule with "Rule Identifier".
-        rule_state = db.query(RuleState).get("Rule Identifier")
-        # Toggle rule state
-        rule_state.enabled = not rule_state.enabled
-        db.commit()
-    else:
-        # Get all things of type "switch" and "shelly". Thing.resolve returns all things matching the Thing descriptor.
-        switches = Thing("switch").resolve(db)
-        shellies = Thing("shelly").resolve(db)
-        # Iterate over all found things and switch them off.
-        for switch in switches + shellies:
-            switch.off()
-    # Close the database connection
-    db.close()
+    with shared.db_session_factory() as db:
+        if event.state == "S":
+            # Get RuleState of rule with "Rule Identifier".
+            rule_state = db.query(RuleState).get("Rule Identifier")
+            # Toggle rule state
+            rule_state.enabled = not rule_state.enabled
+            db.commit()
+        else:
+            # Get all things of type "switch" and "shelly". Thing.resolve returns all things matching the Thing descriptor.
+            switches = Thing("switch").resolve(db)
+            shellies = Thing("shelly").resolve(db)
+            # Iterate over all found things and switch them off.
+            for switch in switches + shellies:
+                switch.off()
 
 
 @rule("Rule Identifier", Thing("temperature", name="Example"))
@@ -52,13 +50,12 @@ def rule_function_name(event):
 
 @rule("Timer Identifier")
 def timer_function_name(event):
-    db = shared.db_session_factory()
-    switch = Thing("switch", name="Example Switch").resolve(db)[0]
-    if switch.last_state(db).status_bool:
-        switch.off()
-    else:
-        switch.on()
-    db.close()
+    with shared.db_session_factory() as db:
+        switch = Thing("switch", name="Example Switch").resolve(db)[0]
+        if switch.last_state(db).status_bool:
+            switch.off()
+        else:
+            switch.on()
 
 
 def init_timers():

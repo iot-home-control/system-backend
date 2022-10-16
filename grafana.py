@@ -71,9 +71,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
 
-            db = db_session_factory()
-            resp = [{"text": t.name + " (" + t.type.capitalize() + ")", "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
-            db.close()
+            with db_session_factory() as db:
+                resp = [{"text": t.name + " (" + t.type.capitalize() + ")", "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
         elif self.path == _prefix + "/query":
             targets = [t["target"] for t in req["targets"] if t.get("type") == "timeseries"]
             timerange = req["range"]
@@ -81,32 +80,30 @@ class Handler(BaseHTTPRequestHandler):
             range_stop = dateutil.parser.parse(timerange["to"])
             interval_ms = req["intervalMs"]
             max_data_points = req["maxDataPoints"]
-            db = db_session_factory()
-
-            resp = []
-            for target in targets:
-                if not target:
-                    continue
-                thing = db.query(Thing).get(target)
-                if not thing:
-                    continue
-                display_name = thing.name + " (" + thing.type.capitalize() + ")"
-                datatype = thing.get_data_type()
-                datapoints = []
-                trends = db.query(Trend).filter(Trend.start >= range_start, Trend.end <= range_stop, Trend.thing_id == thing.id).order_by(Trend.start)
-                states = db.query(State).filter(State.when.between(range_start, range_stop), State.thing_id == thing.id).order_by(State.when)
-                # print("Found", trends.count(), "trends for", thing.name, thing.type, thing.id, "between", range_start, "and", range_stop)
-                for trend in trends.all():
-                    when = round((trend.start + trend.interval/2).timestamp()*1000)
-                    datapoints.append([trend.t_avg, when])
-                for state in states.all():
-                    when = round(state.when.timestamp()*1000)
-                    if datatype == DataType.Float:
-                        datapoints.append([state.status_float, when])
-                    elif datatype == DataType.Boolean:
-                        datapoints.append([state.status_bool, when])
-                resp.append(dict(target=display_name, datapoints=datapoints))
-            db.close()
+            with db_session_factory() as db:
+                resp = []
+                for target in targets:
+                    if not target:
+                        continue
+                    thing = db.query(Thing).get(target)
+                    if not thing:
+                        continue
+                    display_name = thing.name + " (" + thing.type.capitalize() + ")"
+                    datatype = thing.get_data_type()
+                    datapoints = []
+                    trends = db.query(Trend).filter(Trend.start >= range_start, Trend.end <= range_stop, Trend.thing_id == thing.id).order_by(Trend.start)
+                    states = db.query(State).filter(State.when.between(range_start, range_stop), State.thing_id == thing.id).order_by(State.when)
+                    # print("Found", trends.count(), "trends for", thing.name, thing.type, thing.id, "between", range_start, "and", range_stop)
+                    for trend in trends.all():
+                        when = round((trend.start + trend.interval/2).timestamp()*1000)
+                        datapoints.append([trend.t_avg, when])
+                    for state in states.all():
+                        when = round(state.when.timestamp()*1000)
+                        if datatype == DataType.Float:
+                            datapoints.append([state.status_float, when])
+                        elif datatype == DataType.Boolean:
+                            datapoints.append([state.status_bool, when])
+                    resp.append(dict(target=display_name, datapoints=datapoints))
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

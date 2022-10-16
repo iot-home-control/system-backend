@@ -66,7 +66,6 @@ did_shutdown = False
 rule_executor: Optional[threading.Thread] = None
 timer_checker: Optional[threading.Thread] = None
 websocket: Optional[threading.Thread] = None
-db_session_factory = None
 rule_queue = Queue()
 ws_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -163,9 +162,8 @@ class Session:
 
 def rule_executer_thread(queue):
     rulelog.info("Staring up")
-    db = shared.db_session_factory()
-    rules.init(db)
-    db.close()
+    with shared.db_session_factory() as db:
+        rules.init(db)
     while not request_shutdown:
         try:
             event = queue.get(block=True, timeout=0.2)
@@ -174,25 +172,23 @@ def rule_executer_thread(queue):
                 continue
             thing_id, thing_class, kind, data = event
             for rule in rules.triggers.get(thing_id, []):
-                db = shared.db_session_factory()
-                rulestate = db.query(RuleState).get(rules.all_rules[rule])
-                if rulestate and not rulestate.enabled:
-                    db.close()
-                    continue
-                try:
-                    if kind == "state":
-                        revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id),
-                                                 db.query(State).get(data))
-                    elif kind == "event":
-                        revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
-                    else:
-                        rulelog.error(f"Unsupported rule event kind: {kind}")
-                        break
-                    rule(revent)
-                    db.commit()
-                except Exception:
-                    rulelog.exception("Error while executing rule {}".format(rules.all_rules[rule]))
-                db.close()
+                with shared.db_session_factory() as db:
+                    rulestate = db.query(RuleState).get(rules.all_rules[rule])
+                    if rulestate and not rulestate.enabled:
+                        continue
+                    try:
+                        if kind == "state":
+                            revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id),
+                                                     db.query(State).get(data))
+                        elif kind == "event":
+                            revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
+                        else:
+                            rulelog.error(f"Unsupported rule event kind: {kind}")
+                            break
+                        rule(revent)
+                        db.commit()
+                    except Exception:
+                        rulelog.exception("Error while executing rule {}".format(rules.all_rules[rule]))
             queue.task_done()
         except Empty:
             pass
@@ -433,26 +429,26 @@ async def handle_ws_connection(websocket, path):
 
     connected_wss.add(websocket)
     sessions[websocket] = session
-    db = shared.db_session_factory()
+
     time.sleep(0.2)
 
     try:
         if session.permission == "authenticated" or session.scope == "local":
-            await websocket.send(json.dumps(dict(type="auth_ok", level=session.to_access_level())))
-            known_things = db.query(Thing).order_by(Thing.id).all()
-            msg = dict(type="things", things=[t.to_dict() for t in known_things])
-            await websocket.send(json.dumps(msg))
+            with shared.db_session_factory() as db:
+                await websocket.send(json.dumps(dict(type="auth_ok", level=session.to_access_level())))
+                known_things = db.query(Thing).order_by(Thing.id).all()
+                msg = dict(type="things", things=[t.to_dict() for t in known_things])
+                await websocket.send(json.dumps(msg))
 
-            states = [s for s in (t.last_state(db) for t in known_things) if s]
-            msg = dict(type="states", states=[s.to_dict() for s in states])
-            await websocket.send(json.dumps(msg, cls=JsonEncoder))
+                states = [s for s in (t.last_state(db) for t in known_things) if s]
+                msg = dict(type="states", states=[s.to_dict() for s in states])
+                await websocket.send(json.dumps(msg, cls=JsonEncoder))
 
-            views_query = db.query(View).order_by(View.name, View.id).all()
-            views = dict(All=[thing.id for thing in known_things])
-            views.update({view.name: [thing.id for thing in view.things] for view in views_query})
-            msg = dict(type="views", views=views)
-            await websocket.send(json.dumps(msg))
-        db.close()
+                views_query = db.query(View).order_by(View.name, View.id).all()
+                views = dict(All=[thing.id for thing in known_things])
+                views.update({view.name: [thing.id for thing in view.things] for view in views_query})
+                msg = dict(type="views", views=views)
+                await websocket.send(json.dumps(msg))
 
         async for message in websocket:
             try:
@@ -469,22 +465,21 @@ async def handle_ws_connection(websocket, path):
             if not msg_type:
                 wslog.warning("Discarding message from {}: Missing \"type\" field".format(websocket.remote_address))
                 continue
-            db = shared.db_session_factory()
-            if msg_type == "command":
-                await ws_type_command(db, websocket, data)
-            elif msg_type == "last_seen":
-                await ws_type_last_seen(db, websocket, data)
-            elif msg_type == "create_or_edit":
-                await ws_type_create_or_edit(db, websocket, data)
-            elif msg_type == "edit_save":
-                await ws_type_edit_save(db, websocket, data)
-            elif msg_type == "authenticate":
-                await ws_authenticate(db, websocket, data, session)
-            elif msg_type == "rules":
-                await send_rules(db, websocket, data)
-            else:
-                wslog.warning("Unknown msg_type {}".format(msg_type))
-            db.close()
+            with shared.db_session_factory() as db:
+                if msg_type == "command":
+                    await ws_type_command(db, websocket, data)
+                elif msg_type == "last_seen":
+                    await ws_type_last_seen(db, websocket, data)
+                elif msg_type == "create_or_edit":
+                    await ws_type_create_or_edit(db, websocket, data)
+                elif msg_type == "edit_save":
+                    await ws_type_edit_save(db, websocket, data)
+                elif msg_type == "authenticate":
+                    await ws_authenticate(db, websocket, data, session)
+                elif msg_type == "rules":
+                    await send_rules(db, websocket, data)
+                else:
+                    wslog.warning("Unknown msg_type {}".format(msg_type))
         else:
             wslog.info("Client {} disconnected".format(websocket.remote_address))
             connected_wss.remove(websocket)
@@ -493,8 +488,6 @@ async def handle_ws_connection(websocket, path):
         connected_wss.remove(websocket)
         del sessions[websocket]
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
-        if db:
-            db.close()
 
 
 def ws_thread(queue):
@@ -543,30 +536,29 @@ def on_mqtt_disconnect(client, userdata, rc):
 
 def on_mqtt_message(client, userdata, message):
     try:
-        db = shared.db_session_factory()
-        if message.topic.startswith("alive"):
-            device_id = message.payload.decode("ascii")
-            LastSeen.update_last_seen(db, device_id)
-        else:
-            split_topic = message.topic.split("/")
-            thing_cls = get_thing_cls(split_topic)
-            if thing_cls is None:
-                return
-            thing, data = thing_cls.get_by_mqtt_topic(db, split_topic)
-            if not thing:
-                return
-            print("Thing {} {} sent new state".format(thing.type, thing.name))
-            res = thing.process_status(db, message.payload.decode("ascii"), data)
-            if res[2] == "state":
-                msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
-                asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
-                                                             restrict_to_access_level=AccessLevel.Local), ws_event_loop)
-                rule_queue.put(res)
-            elif res[2] == "event":
-                rule_queue.put(res)
+        with shared.db_session_factory() as db:
+            if message.topic.startswith("alive"):
+                device_id = message.payload.decode("ascii")
+                LastSeen.update_last_seen(db, device_id)
             else:
-                mqttlog.error(f"Malformed process_status response '{res}'")
-        db.close()
+                split_topic = message.topic.split("/")
+                thing_cls = get_thing_cls(split_topic)
+                if thing_cls is None:
+                    return
+                thing, data = thing_cls.get_by_mqtt_topic(db, split_topic)
+                if not thing:
+                    return
+                print("Thing {} {} sent new state".format(thing.type, thing.name))
+                res = thing.process_status(db, message.payload.decode("ascii"), data)
+                if res[2] == "state":
+                    msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
+                    asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
+                                                                 restrict_to_access_level=AccessLevel.Local), ws_event_loop)
+                    rule_queue.put(res)
+                elif res[2] == "event":
+                    rule_queue.put(res)
+                else:
+                    mqttlog.error(f"Malformed process_status response '{res}'")
     except Exception:
         mqttlog.exception("Uncaught exception in on_mqtt_message")
 
@@ -607,10 +599,9 @@ def reload():
     mq.stop()
     import models.database
     models.database.thing_state_cache.clear()
-    db = shared.db_session_factory()
-    for thing in db.query(Thing).all():
-        thing.last_state(db)
-    db.close()
+    with shared.db_session_factory() as db:
+        for thing in db.query(Thing).all():
+            thing.last_state(db)
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
 
 
@@ -826,30 +817,27 @@ def collate_trends(db):
 
 @cli.command()
 def database_housekeeping():
-    db = shared.db_session_factory()
-
-    hklog.info("Collate states to trends")
-    collate_states_to_trends(db)
-    hklog.info("Collate trends to coarser trends")
-    collate_trends(db)
-    hklog.info("Done")
-
-    db.close()
+    with shared.db_session_factory() as db:
+        hklog.info("Collate states to trends")
+        collate_states_to_trends(db)
+        hklog.info("Collate trends to coarser trends")
+        collate_trends(db)
+        hklog.info("Done")
 
 
 @cli.command("add-user")
 @click.argument("name", type=click.STRING)
 @click.option("--display-name", type=click.STRING)
 def add_user(name, display_name=None):
-    db = shared.db_session_factory()
-    pw = click.prompt("Password", hide_input=True, type=click.STRING)
-    pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
-    user = User(name=name, display_name=display_name, pwhash=pw_hash.decode("ascii"))
-    db.add(user)
-    try:
-        db.commit()
-    except sqlalchemy.exc.IntegrityError:
-        print("Username not available")
+    with shared.db_session_factory() as db:
+        pw = click.prompt("Password", hide_input=True, type=click.STRING)
+        pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
+        user = User(name=name, display_name=display_name, pwhash=pw_hash.decode("ascii"))
+        db.add(user)
+        try:
+            db.commit()
+        except sqlalchemy.exc.IntegrityError:
+            print("Username not available")
 
 
 if __name__ == "__main__":

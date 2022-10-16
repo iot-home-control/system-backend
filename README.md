@@ -140,13 +140,12 @@ import shared
 from rules import Thing, rule, RuleEvent
 @rule("rule_switch_lamp_on_switch_event", Thing("switch", name="My Switch"))
 def switch_lamp_on_switch(event: RuleEvent):
-    db = shared.db_session_factory()
-    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
-    if event.state.status_bool:
-       my_lamp.on()
-    else:
-        my_lamp.off()
-    db.close()
+    with shared.db_session_factory() as db:
+        my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+        if event.state.status_bool:
+           my_lamp.on()
+        else:
+            my_lamp.off()
 ```
 
 Wouldn't it be nice, if the "My Lamp" switches automatically off, when we go to bed.
@@ -159,10 +158,9 @@ import timer
 @timer.timer
 @rule("timer_switch_off_my_lamp")
 def switch_off_my_lamp(event):
-    db = shared.db_session_factory()
-    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
-    my_lamp.off()
-    db.close()
+    with shared.db_session_factory() as db:
+        my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+        my_lamp.off()
 ```
 
 Then, we have to define a timer, which switches off "My Lamp" at 22:30 from Mon to Fri.
@@ -194,12 +192,11 @@ import dateutil
 tz = dateutil.tz.gettz(getattr(config, "TIMEZONE", "UTC"))
 @rule("rule_keep_the_lights_on", Thing("shellybutton", device_id="shellybutton1-DEVICE_ID"))
 def button_rule(event):
-    db = shared.db_session_factory()
-    my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
-    if event.state == "S":
-        my_lamp.on()
-        timer.add_timer("timer_switch_off_my_lamp", switch_off_my_lamp, at=datetime.datetime.now(tz)+datetime.timedelta(minutes=5))
-    db.close()
+    with shared.db_session_factory() as db:
+        my_lamp = Thing("shelly", name="My Lamp").resolve(db)[0]
+        if event.state == "S":
+            my_lamp.on()
+            timer.add_timer("timer_switch_off_my_lamp", switch_off_my_lamp, at=datetime.datetime.now(tz)+datetime.timedelta(minutes=5))
 ```
 
 ## Licensing
