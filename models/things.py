@@ -267,7 +267,7 @@ class ShellyPower(Thing):
 
     @staticmethod
     def get_mqtt_subscriptions():
-        return 'shellies/+/emeter/+/power',
+        return 'shellies/+/emeter/+/power', 'shellies/+/relay/+/power',
 
     @staticmethod
     def get_by_mqtt_topic(db, topic: T.List[str]):
@@ -306,7 +306,7 @@ class ShellyEnergy(Thing):
 
     @staticmethod
     def get_mqtt_subscriptions():
-        return 'shellies/+/emeter/+/total',
+        return 'shellies/+/emeter/+/total', 'shellies/+/relay/+/energy',
 
     @staticmethod
     def get_by_mqtt_topic(db, topic: T.List[str]):
