@@ -329,7 +329,7 @@ class ShellyTRV(Thing):
         return "shellies/{device_id}/info".format(type=self.type, device_id=self.device_id, vnode_id=self.vnode_id)
 
     def get_base_topic(self):
-        return "shellies/{device_id}/thermostat/{vnode_id}/command/".format(type=self.type,
+        return "shellies/{device_id}/thermostat/{vnode_id}/command".format(type=self.type,
                                                                             device_id=self.device_id,
                                                                             vnode_id=self.vnode_id)
 
