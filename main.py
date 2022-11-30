@@ -257,7 +257,7 @@ async def ws_type_command(db, websocket, data):
     if not thing:
         wslog.warning("Thing {} is unknown".format(thing_id))
         return
-    if thing.type in ['switch', 'shelly']:
+    if thing.type in ['switch', 'shelly', 'shellyplus']:
         val = data.get("value")
         if val:
             thing.on()
