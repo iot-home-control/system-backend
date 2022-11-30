@@ -27,6 +27,7 @@ import time
 from queue import Empty, Queue
 from typing import Optional
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, asdict
 
 
@@ -548,17 +549,27 @@ def on_mqtt_message(client, userdata, message):
                 thing, data = thing_cls.get_by_mqtt_topic(db, split_topic)
                 if not thing:
                     return
-                print("Thing {} {} sent new state".format(thing.type, thing.name))
-                res = thing.process_status(db, message.payload.decode("ascii"), data)
-                if res[2] == "state":
-                    msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
-                    asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
-                                                                 restrict_to_access_level=AccessLevel.Local), ws_event_loop)
-                    rule_queue.put(res)
-                elif res[2] == "event":
-                    rule_queue.put(res)
+
+                def process_thing_status(thing):
+                    print("Thing {} {} sent new state".format(thing.type, thing.name))
+                    res = thing.process_status(db, message.payload.decode("ascii"), data)
+                    if res[2] == "state":
+                        msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
+                        asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
+                                                                     restrict_to_access_level=AccessLevel.Local),
+                                                         ws_event_loop)
+                        rule_queue.put(res)
+                    elif res[2] == "event":
+                        rule_queue.put(res)
+                    else:
+                        mqttlog.error(f"Malformed process_status response '{res}'")
+
+                if isinstance(thing, Iterable):
+                    for t in thing:
+                        process_thing_status(t)
                 else:
-                    mqttlog.error(f"Malformed process_status response '{res}'")
+                    process_thing_status(thing)
+
     except Exception:
         mqttlog.exception("Uncaught exception in on_mqtt_message")
 
