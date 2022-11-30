@@ -409,6 +409,60 @@ class ShellyButton(Thing):
         return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
+class ShellyPlus(Switch):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shellyplus'
+    }
+
+    """
+    > shellyplus2pm-a8032ab66ae0/rpc '{"id":2, "src": "test", "method": "Switch.Set", "params":{"id":1 "on":true}}'
+    < shellyplus2pm-a8032ab66ae0/status/switch:0 {
+        "id":0,
+        "source":"WS_in",
+        "output":false,
+        "apower":0.0,
+        "voltage":232.3,
+        "current":0.000,
+        "pf":0.00,
+        "aenergy":{"total":100.545,"by_minute":[0.000,0.000,0.000],"minute_ts":1669572158},
+        "temperature":{"tC":50.4, "tF":122.7}
+    }
+    """
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return '+/status/+',
+
+    def get_action_topic(self):
+        return "{device_id}/rpc".format(device_id=self.device_id)
+
+    def process_status(self, db, state, data):
+        LastSeen.update_last_seen(db, self.device_id)
+        try:
+            data = json.loads(state)
+        except json.JSONDecodeError:
+            data = {}
+
+        state = data.get("output")
+        return super().process_status(db, f"{'local' if data.get('source') == 'switch' else 'mqtt'},{state}", data)
+
+    def on(self):
+        payload = {"id": 42, "src": "home-control", "method": "Switch.Set", "params": {"id": self.vnode_id, "on": True}}
+        mq.publish(self.get_action_topic(), json.dumps(payload))
+
+    def off(self):
+        payload = {"id": 42, "src": "home-control", "method": "Switch.Set", "params": {"id": self.vnode_id, "on": False}}
+        mq.publish(self.get_action_topic(), json.dumps(payload))
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: T.List[str]):
+        # shellplus<subtype>-<id> / status / <part>:<vnode>
+        node_type = 'shellyplus'
+        device_id = topic[0]
+        vnode_id = int(topic[-1].split(':')[-1])
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+
 class FrischluftWorksCO2Sensor(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'frischluftworks-co2'
@@ -461,5 +515,6 @@ thing_type_table = {
     "shelly_energy": ShellyEnergy,
     "shelly_temperature": ShellyTemperature,
     "shelly_humidity": ShellyHumidity,
+    "shellyplus": ShellyPlus,
     "frischluftworks-co2": FrischluftWorksCO2Sensor,
 }
