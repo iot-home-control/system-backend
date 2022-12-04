@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import math
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import threading
 from typing import Optional
@@ -23,6 +24,7 @@ import json
 import dateutil.parser
 from urllib.parse import urlparse, parse_qs
 import os
+import sqlalchemy as sa
 
 _server: Optional[ThreadingHTTPServer] = None
 _prefix: Optional[str] = ""
@@ -72,7 +74,8 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
             with db_session_factory() as db:
-                resp = [{"text": t.name + " (" + t.type.capitalize() + ")", "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
+                rows = db.execute(sa.select(Thing.id, Thing.name, Thing.type).order_by(Thing.id))
+                resp = [{"text": n + " (" + t.capitalize() + ")", "value": i} for i, n, t in rows]
         elif self.path == _prefix + "/query":
             targets = [t["target"] for t in req["targets"] if t.get("type", "timeseries") == "timeseries"]
             timerange = req["range"]
@@ -80,6 +83,12 @@ class Handler(BaseHTTPRequestHandler):
             range_stop = dateutil.parser.parse(timerange["to"])
             interval_ms = req["intervalMs"]
             max_data_points = req["maxDataPoints"]
+
+            data_column_map = {
+                DataType.Float: State.status_float,
+                DataType.Boolean: State.status_bool,
+            }
+
             with db_session_factory() as db:
                 resp = []
                 for target in targets:
@@ -91,18 +100,27 @@ class Handler(BaseHTTPRequestHandler):
                     display_name = thing.name + " (" + thing.type.capitalize() + ")"
                     datatype = thing.get_data_type()
                     datapoints = []
-                    trends = db.query(Trend).filter(Trend.start >= range_start, Trend.end <= range_stop, Trend.thing_id == thing.id).order_by(Trend.start)
-                    states = db.query(State).filter(State.when.between(range_start, range_stop), State.thing_id == thing.id).order_by(State.when)
+                    trends = db.execute(sa.select(Trend)
+                                        .where(Trend.start >= range_start, Trend.end <= range_stop,
+                                               Trend.thing_id == thing.id)
+                                        .order_by(Trend.start)
+                                        ).scalars()
+
+                    states = db.execute(sa.select(State.when, data_column_map[datatype])
+                                        .where(State.thing_id == thing.id, State.when.between(range_start, range_stop))
+                                        .order_by(State.when))
                     # print("Found", trends.count(), "trends for", thing.name, thing.type, thing.id, "between", range_start, "and", range_stop)
                     for trend in trends.all():
                         when = round((trend.start + trend.interval/2).timestamp()*1000)
                         datapoints.append([trend.t_avg, when])
-                    for state in states.all():
-                        when = round(state.when.timestamp()*1000)
-                        if datatype == DataType.Float:
-                            datapoints.append([state.status_float, when])
+                    for when, value in states:
+                        if value is None:
+                            continue
+                        when = round(when.timestamp()*1000)
+                        if datatype == DataType.Float and not math.isnan(value):
+                            datapoints.append([value, when])
                         elif datatype == DataType.Boolean:
-                            datapoints.append([state.status_bool, when])
+                            datapoints.append([value, when])
                     resp.append(dict(target=display_name, datapoints=datapoints))
 
             self.send_response(200)
