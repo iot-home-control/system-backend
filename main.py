@@ -193,7 +193,7 @@ def rule_executer_thread(queue):
         except Empty:
             pass
         except Exception:
-            rulelog.exception("Uncaught Execption in rule_executer_thread")
+            rulelog.exception("Uncaught Exception in rule_executer_thread")
     rulelog.info("Shutting down")
 
 
@@ -204,7 +204,7 @@ def timer_checker_thread():
             timer.process_timers()
             time.sleep(1)
         except Exception:
-            timerlog.exception("Uncaught Execption in timer_checker_thread")
+            timerlog.exception("Uncaught Exception in timer_checker_thread")
 
 
 async def send_to_all(msg, restrict_to_access_level=None):
@@ -386,7 +386,8 @@ async def send_rules(db, websocket, data):
     # expected format of data
     # {"rule_name": {enabled: True / False / Null}
     if data.get("data"):
-        for rule_name, rule_state in data.get("data").items():  #todo: this is user defined content, we should be aware of this
+        # TODO: this is user defined content, we should be aware of this
+        for rule_name, rule_state in data.get("data").items():
             if rule_state and rule_state.get("enabled") is not None:
                 current_rule_state = db.query(RuleState).get(rule_name)
                 if current_rule_state is not None:
@@ -687,10 +688,10 @@ def dt_to_interval_start(dt: datetime.datetime, minutes: int) -> datetime.dateti
 # Interval length in minutes, aggregate when older than x minutes
 intervals = [
     # Keep raw state data for 7 days
-    (5, datetime.timedelta(days=7)),  # Keep 5 minute intervals for data between 7 days and 4 weeks
-    (15, datetime.timedelta(weeks=4)),  # Keep 15 minute intervals for data between 4 weeks (1 month) and 52/2 weeks (6 months, half a year)
-    (60, datetime.timedelta(weeks=52 / 2)),  # Keep 1 hour intervals for data between 6 montsh and 2 years
-    (24 * 60, datetime.timedelta(weeks=52 * 2)),  # Keep 1 day intervals for data older than 2 years
+    (5, datetime.timedelta(days=7)),  # Keep 5-minute intervals for data between 7 days and 4 weeks
+    (15, datetime.timedelta(weeks=4)),  # Keep 15-minute intervals for data between 4 weeks (1 month) and 52/2 weeks (6 months, half a year)
+    (60, datetime.timedelta(weeks=52 / 2)),  # Keep 1-hour intervals for data between 6 months and 2 years
+    (24 * 60, datetime.timedelta(weeks=52 * 2)),  # Keep 1-day intervals for data older than 2 years
 ]
 dt_epsilon = datetime.timedelta(microseconds=1)
 
@@ -700,7 +701,7 @@ def collate_states_to_trends(db):
 
     This is done by iterating over all stored trends that are older than the single state retention time configured in the finest grained trend interval.
     Interation is done in reverse time order (from youngest to oldest) - starting at an interval boundary - so no partial intervals are created.
-    Iteration is done on a per thing basis.
+    Iteration is done on a per-thing basis.
     """
 
     def collate_data(states):
@@ -760,13 +761,15 @@ def collate_states_to_trends(db):
 def collate_trends(db):
     """ Collate trends that are old enough into coarser trends based on configured intervals.
 
-    In contrast to `collate_states` this methods runs in bottom-up fashion i.e. from oldest to youngest trend.
-    For easier code structure the trends are collated from finest to coarsests.
-    In worst case the data is put firstly in the second finest bin and then in the next coarser bin and so on.
-    This might need some time when running initial data collation or if data housekeeping was not run for a longer period.
+    In contrast to `collate_states` this method runs in bottom-up fashion i.e. from oldest to youngest trend.
+    For easier code structure the trends are collated from finest to coarsest.
+    In worst case the data is put firstly in the second-finest bin and then in the next coarser bin and so on.
+    This might need some time when running initial data collation or if data housekeeping was not run for a longer
+    period.
 
-    Within the loop for the trends the data of each thing is collected in a dictionary to avoid running over the data again and again.
-    A bucket is closed when a trend outsinde the current interval is found.
+    Within the loop for the trends the data of each thing is collected in a dictionary to avoid running over the data
+    again and again.
+    A bucket is closed when a trend outside the current interval is found.
     Closing the bucket adds the new trend to the database and removes the finer ones which were used to generate it.
     In the end there might be buckets which have not been closed. Their content is kept in uncollated in the database.
     """
