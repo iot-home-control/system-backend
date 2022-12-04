@@ -25,7 +25,7 @@ import signal
 import threading
 import time
 from queue import Empty, Queue
-from typing import Optional
+from typing import List, Optional
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass, asdict
@@ -47,7 +47,6 @@ import rules
 import shared
 import timer
 from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User, Timer
-import typing as T
 
 try:
     import local_rules
@@ -123,8 +122,8 @@ def get_mqtt_topics():
     return ts
 
 
-def get_thing_cls(mqtt_topic: T.List[str]):
-    cur: T.Optional[dict] = mqtt_topics
+def get_thing_cls(mqtt_topic: List[str]):
+    cur: Optional[dict] = mqtt_topics
     for level in mqtt_topic:
         cur = cur.get(level, cur.get("+", None))
         if cur is None:
