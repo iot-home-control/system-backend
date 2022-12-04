@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             with db_session_factory() as db:
                 resp = [{"text": t.name + " (" + t.type.capitalize() + ")", "value": t.id} for t in db.query(Thing).order_by(Thing.id).all()]
         elif self.path == _prefix + "/query":
-            targets = [t["target"] for t in req["targets"] if t.get("type") == "timeseries"]
+            targets = [t["target"] for t in req["targets"] if t.get("type", "timeseries") == "timeseries"]
             timerange = req["range"]
             range_start = dateutil.parser.parse(timerange["from"])
             range_stop = dateutil.parser.parse(timerange["to"])
