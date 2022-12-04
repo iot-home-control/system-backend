@@ -699,22 +699,24 @@ dt_epsilon = datetime.timedelta(microseconds=1)
 def collate_states_to_trends(db):
     """ Collates stored states into trends of the finest configured interval.
 
-    This is done by iterating over all stored trends that are older than the single state retention time configured in the finest grained trend interval.
-    Interation is done in reverse time order (from youngest to oldest) - starting at an interval boundary - so no partial intervals are created.
+    This is done by iterating over all stored trends that are older than the single state retention time configured in
+    the finest-grained trend interval.
+    Interation is done in reverse time order (from youngest to oldest) - starting at an interval boundary - so no
+    partial intervals are created.
     Iteration is done on a per-thing basis.
     """
 
-    def collate_data(states):
-        vmin = math.inf
-        vmax = -math.inf
-        vsum = 0
-        for state in states:
-            vmin = min(vmin, state.status_float)
-            vmax = max(vmax, state.status_float)
-            vsum += state.status_float
+    def collate_data(state_data):
+        v_min = math.inf
+        v_max = -math.inf
+        v_sum = 0
+        for entry in state_data:
+            v_min = min(v_min, entry.status_float)
+            v_max = max(v_max, entry.status_float)
+            v_sum += entry.status_float
 
-        vavg = vsum / len(states)
-        return len(states), vmin, round(vavg, 1), vmax
+        v_avg = v_sum / len(state_data)
+        return len(state_data), v_min, round(v_avg, 1), v_max
 
     now = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -738,11 +740,11 @@ def collate_states_to_trends(db):
         for state in states:
             if state.when < current_interval:
                 if len(data_bin):
-                    samples, vmin, vavg, vmax = collate_data(data_bin)
-                    data.append((current_interval, (samples, vmin, vavg, vmax)))
+                    samples, t_min, t_avg, t_max = collate_data(data_bin)
+                    data.append((current_interval, (samples, t_min, t_avg, t_max)))
                     interval_end = (interval_start - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
                     trend = Trend(thing_id=thing.id, interval=interval_length, start=current_interval, end=interval_end,
-                                  samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
+                                  samples=samples, t_min=t_min, t_avg=t_avg, t_max=t_max)
                     db.add(trend)
                     added += 1
                     data_bin = []
@@ -775,17 +777,17 @@ def collate_trends(db):
     """
 
     def collate_data(trends):
-        vmin = math.inf
-        vmax = -math.inf
-        vsum = 0
+        v_min = math.inf
+        v_max = -math.inf
+        v_sum = 0
         count = 0
-        for trend in trends:
-            vmin = min(vmin, trend.t_min)
-            vmax = max(vmax, trend.t_max)
-            vsum += trend.t_avg
-            count += trend.samples
-        vavg = vsum / len(trends)
-        return count, vmin, round(vavg, 1), vmax
+        for entry in trends:
+            v_min = min(v_min, entry.t_min)
+            v_max = max(v_max, entry.t_max)
+            v_sum += entry.t_avg
+            count += entry.samples
+        v_avg = v_sum / len(trends)
+        return count, v_min, round(v_avg, 1), v_max
 
     for idx in range(1, len(intervals)):
         prv_len = datetime.timedelta(minutes=intervals[idx - 1][0])
@@ -808,10 +810,10 @@ def collate_trends(db):
                 interval_data[tid] = []
             end = interval_end[tid]
             if trend.start > end:
-                samples, vmin, vavg, vmax = collate_data(interval_data[tid])
+                samples, t_min, t_avg, t_max = collate_data(interval_data[tid])
                 coarser_trend = Trend(thing_id=trend.thing_id, interval=cur_len, start=interval_start[tid],
                                       end=interval_end[tid],
-                                      samples=samples, t_min=vmin, t_avg=vavg, t_max=vmax)
+                                      samples=samples, t_min=t_min, t_avg=t_avg, t_max=t_max)
                 db.add(coarser_trend)
                 added += 1
                 removed += len(interval_data[tid])
