@@ -336,8 +336,8 @@ async def ws_type_edit_save(db, websocket, data):
             views.update({view.name: [thing.id for thing in view.things] for view in views_query})
             await send_to_all(json.dumps(dict(type="views", views=views)),
                               restrict_to_access_level=AccessLevel.Local)
-        #if new_thing:
-        #    mq.subscribe(thing.get_state_topic())
+        if new_thing:
+            mq.subscribe(thing.get_state_topic())
 
 
 async def new_ws_session(websocket):
