@@ -785,7 +785,7 @@ def collate_trends(db):
             vsum += trend.t_avg
             count += trend.samples
         vavg = vsum / len(trends)
-        return (count, vmin, round(vavg, 1), vmax)
+        return count, vmin, round(vavg, 1), vmax
 
     for idx in range(1, len(intervals)):
         prv_len = datetime.timedelta(minutes=intervals[idx - 1][0])
@@ -802,7 +802,7 @@ def collate_trends(db):
                 Trend.start.asc()).all():
             tid = trend.thing_id
             if interval_start.get(tid) is None:
-                interval_start[tid] = dt_to_interval_start(trend.start, cur_len.total_seconds() // 60).replace(
+                interval_start[tid] = dt_to_interval_start(trend.start, int(cur_len.total_seconds() // 60)).replace(
                     tzinfo=datetime.timezone.utc)
                 interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
                 interval_data[tid] = []
@@ -818,7 +818,7 @@ def collate_trends(db):
                 for t in interval_data[tid]:
                     db.delete(t)
 
-                interval_start[tid] = dt_to_interval_start(trend.start, cur_len.total_seconds() // 60).replace(
+                interval_start[tid] = dt_to_interval_start(trend.start, int(cur_len.total_seconds() // 60)).replace(
                     tzinfo=datetime.timezone.utc)
                 interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
                 interval_data[tid] = []
