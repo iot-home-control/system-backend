@@ -112,6 +112,8 @@ class Handler(BaseHTTPRequestHandler):
                     # print("Found", trends.count(), "trends for", thing.name, thing.type, thing.id, "between", range_start, "and", range_stop)
                     for trend in trends.all():
                         when = round((trend.start + trend.interval/2).timestamp()*1000)
+                        if trend.t_avg is None or math.isnan(trend.t_avg):
+                            continue
                         datapoints.append([trend.t_avg, when])
                     for when, value in states:
                         if value is None:
