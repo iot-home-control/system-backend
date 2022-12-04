@@ -219,7 +219,7 @@ async def send_to_all(msg, restrict_to_access_level=None):
                     await ws.send(msg)
             else:
                 await ws.send(msg)
-        except websockets.exceptions.ConnectionClosed:
+        except websockets.ConnectionClosed:
             pass
 
     await asyncio.wait([asyncio.create_task(sender(ws)) for ws in connected_wss])
@@ -485,7 +485,7 @@ async def handle_ws_connection(websocket, path):
             wslog.info("Client {} disconnected".format(websocket.remote_address))
             connected_wss.remove(websocket)
             del sessions[websocket]
-    except websockets.exceptions.ConnectionClosed:
+    except websockets.ConnectionClosed:
         connected_wss.remove(websocket)
         del sessions[websocket]
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
