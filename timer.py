@@ -15,16 +15,16 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import datetime
-import croniter
-
-import shared
-from models.database import Timer
+import logging
 from pprint import pformat
-import rules
+
+import croniter
+import dateutil.tz
 
 import config
-import dateutil.tz
-import logging
+import rules
+import shared
+from models.database import Timer
 
 tz = dateutil.tz.gettz(getattr(config, "TIMEZONE", "UTC"))
 

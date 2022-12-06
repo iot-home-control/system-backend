@@ -14,17 +14,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import json
 import math
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+import os
 import threading
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Optional
+from urllib.parse import urlparse, parse_qs
+
+import dateutil.parser
+import sqlalchemy as sa
+
 from models.database import Thing, State, DataType, Trend
 from shared import db_session_factory
-import json
-import dateutil.parser
-from urllib.parse import urlparse, parse_qs
-import os
-import sqlalchemy as sa
 
 _server: Optional[ThreadingHTTPServer] = None
 _prefix: Optional[str] = ""

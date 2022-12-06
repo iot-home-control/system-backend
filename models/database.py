@@ -12,14 +12,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
+from enum import Enum
+from typing import List
+
 import sqlalchemy as sa
 import sqlalchemy.orm
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
-from enum import Enum
-import datetime
-from typing import List
-
 
 Base = declarative_base()
 

@@ -14,9 +14,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import models.database
-from enum import Enum
 import functools
+from enum import Enum
+
+import models.database
 
 all_rules = {}
 triggers = {}

@@ -14,13 +14,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import datetime
-
-import rules
 import shared
 import timer
-from rules import rule, Thing
 from models.database import RuleState
+from rules import rule, Thing
 
 
 @rule("Button Rule", Thing("shellybutton", device_id="shellybutton1-DEVICE_ID"))

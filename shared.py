@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sqlalchemy.orm
+
 import config
 
 _db_engine = sqlalchemy.create_engine(config.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True)

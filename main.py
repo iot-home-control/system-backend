@@ -21,23 +21,21 @@ import enum
 import functools
 import json
 import logging
+import math
 import signal
 import threading
 import time
-from queue import Empty, Queue
-from typing import List, Optional
-import math
 from collections.abc import Iterable
 from dataclasses import dataclass, asdict
+from queue import Empty, Queue
+from typing import List, Optional
 
-
-import sqlalchemy.exc
-from itsdangerous import URLSafeSerializer
-
+import bcrypt
 import click
 import paho.mqtt.client as mqttm
+import sqlalchemy.exc
 import websockets
-import bcrypt
+from itsdangerous import URLSafeSerializer
 
 import config
 import grafana
@@ -46,7 +44,7 @@ import mq
 import rules
 import shared
 import timer
-from models.database import DataType, LastSeen, RuleState, State, Thing, ThingView, Trend, View, User, Timer
+from models.database import DataType, LastSeen, RuleState, State, Thing, Trend, View, User, Timer
 
 try:
     import local_rules
