@@ -13,11 +13,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sqlalchemy as sa
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+import sqlalchemy.orm
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
 from enum import Enum
 import datetime
-import typing as T
+from typing import List
 
 
 Base = declarative_base()
@@ -57,7 +58,10 @@ class Thing(Base):
     device_id = sa.Column(sa.String)
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
-    last_seen = sa.orm.column_property(sa.select([LastSeen.last_seen]).where(LastSeen.device_id == device_id).scalar_subquery())
+    last_seen = sa.orm.column_property(sa
+                                       .select(LastSeen.last_seen)
+                                       .where(LastSeen.device_id == device_id)
+                                       .scalar_subquery())
     views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic", back_populates="things")
 
     __mapper_args__ = {
@@ -132,7 +136,7 @@ class Thing(Base):
         return thing
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # type / node-vnode / state
         node_type = topic[0]
         device_id, vnode_id = topic[1].rsplit('-', maxsplit=1)
