@@ -180,7 +180,7 @@ class ShellyTemperature(TemperatureSensor):
 
     def get_state_topic(self):
         return "shellies/{device_id}/ext_temperature/{vnode_id}".format(type=self.type, device_id=self.device_id,
-                                                              vnode_id=self.vnode_id)
+                                                                        vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
@@ -214,7 +214,7 @@ class ShellyHumidity(HumiditySensor):
 
     def get_state_topic(self):
         return "shellies/{device_id}/ext_humidity/{vnode_id}".format(type=self.type, device_id=self.device_id,
-                                                              vnode_id=self.vnode_id)
+                                                                     vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
@@ -251,7 +251,7 @@ class ShellyPower(Thing):
 
     def get_state_topic(self):
         return "shellies/{device_id}/emeter/{vnode_id}/power".format(type=self.type, device_id=self.device_id,
-                                                              vnode_id=self.vnode_id)
+                                                                     vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
@@ -275,7 +275,7 @@ class ShellyPower(Thing):
         node_type = 'shelly_power'
         device_id = topic[1]
         vnode_id = topic[3]
-        function = topic[4]
+        function = topic[4]  # noqa: unused
 
         return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
@@ -290,7 +290,7 @@ class ShellyEnergy(Thing):
 
     def get_state_topic(self):
         return "shellies/{device_id}/emeter/{vnode_id}/total".format(type=self.type, device_id=self.device_id,
-                                                              vnode_id=self.vnode_id)
+                                                                     vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
@@ -330,8 +330,8 @@ class ShellyTRV(Thing):
 
     def get_base_topic(self):
         return "shellies/{device_id}/thermostat/{vnode_id}/command".format(type=self.type,
-                                                                            device_id=self.device_id,
-                                                                            vnode_id=self.vnode_id)
+                                                                           device_id=self.device_id,
+                                                                           vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return f"{self.get_base_topic()}/target_t"
@@ -389,7 +389,7 @@ class ShellyButton(Thing):
             data = json.loads(state)
         except json.JSONDecodeError:
             ...
-        event = data.get("event") # S, SS, SSS, L
+        event = data.get("event")  # S, SS, SSS, L
         return self.id, type(self), "event", event
 
     @classmethod
@@ -447,11 +447,13 @@ class ShellyPlus(Switch):
         return super().process_status(db, f"{'local' if data.get('source') == 'switch' else 'mqtt'},{state}", data)
 
     def on(self):
-        payload = {"id": 42, "src": "home-control", "method": "Switch.Set", "params": {"id": self.vnode_id, "on": True}}
+        payload = {"id": 42, "src": "home-control", "method": "Switch.Set",
+                   "params": {"id": self.vnode_id, "on": True}}
         mq.publish(self.get_action_topic(), json.dumps(payload))
 
     def off(self):
-        payload = {"id": 42, "src": "home-control", "method": "Switch.Set", "params": {"id": self.vnode_id, "on": False}}
+        payload = {"id": 42, "src": "home-control", "method": "Switch.Set",
+                   "params": {"id": self.vnode_id, "on": False}}
         mq.publish(self.get_action_topic(), json.dumps(payload))
 
     @staticmethod
