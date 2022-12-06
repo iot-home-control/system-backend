@@ -42,5 +42,6 @@ def stop():
 def publish(topic, payload):
     return _mqtt.publish(topic, payload)
 
+
 def subscribe(topic):
     return _mqtt.subscribe(topic)
