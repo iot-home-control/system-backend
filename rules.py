@@ -15,9 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import models.database
-import timer
-import datetime
-import shared
 from enum import Enum
 import functools
 
@@ -53,7 +50,7 @@ class RuleEvent:
 class EventSource(Enum):
     Timer = 1  # when a timer timed out
     Trigger = 2  # when status of a thing has changed
-    Event = 3  # when something else happend (e.g. scene button in web interface, shelly button)
+    Event = 3  # when something else happened (e.g. scene button in web interface, shelly button)
 
 
 def rule(name, *trigger, **params):
@@ -64,17 +61,17 @@ def rule(name, *trigger, **params):
             all_args.update(params)
             return func(event, **all_args)
 
-        def init(db):
-            for wrapper in trigger:
-                for t in wrapper.resolve(db):
-                    triggers.setdefault(t.id, []).append(decorator)
+        def init_func(db):
+            for thing_wrapper in trigger:
+                for thing in thing_wrapper.resolve(db):
+                    triggers.setdefault(thing.id, []).append(decorator)
             all_rules[decorator] = name
 
-        rule_inits.append(init)
+        rule_inits.append(init_func)
         return decorator
 
     return wrapper
 
 
 def init_timers():
-   pass
+    pass
