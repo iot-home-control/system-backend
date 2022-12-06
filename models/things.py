@@ -15,7 +15,7 @@
 import mq
 import json
 from models.database import Thing, DataType, LastSeen
-import typing as T
+from typing import List
 
 
 class TemperatureSensor(Thing):
@@ -165,7 +165,7 @@ class Shelly(Switch):
         return 'shellies/+/relay/+',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / relay / vnode
         node_type = 'shelly'
         device_id = topic[1]
@@ -199,7 +199,7 @@ class ShellyTemperature(TemperatureSensor):
         return 'shellies/+/ext_temperature/+',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / ext_temperature / vnode
         node_type = 'shelly_temperature'
         device_id = topic[1]
@@ -233,7 +233,7 @@ class ShellyHumidity(HumiditySensor):
         return 'shellies/+/ext_humidity/+',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / ext_humidity / vnode
         node_type = 'shelly_humidity'
         device_id = topic[1]
@@ -270,7 +270,7 @@ class ShellyPower(Thing):
         return 'shellies/+/emeter/+/power', 'shellies/+/relay/+/power',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / emeter / vnode / function
         node_type = 'shelly_power'
         device_id = topic[1]
@@ -309,7 +309,7 @@ class ShellyEnergy(Thing):
         return 'shellies/+/emeter/+/total', 'shellies/+/relay/+/energy',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / emeter / vnode / function
         node_type = 'shelly_energy'
         device_id = topic[1]
@@ -361,7 +361,7 @@ class ShellyTRV(Thing):
         return 'shellies/+/info',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / info
         node_type = 'shellytrv'
         device_id = topic[1]
@@ -401,7 +401,7 @@ class ShellyButton(Thing):
         return 'shellies/+/input_event/+',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / input_event / vnode
         node_type = 'shellybutton'
         device_id = topic[1]
@@ -457,7 +457,7 @@ class ShellyPlus(Switch):
         mq.publish(self.get_action_topic(), json.dumps(payload))
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # shellplus<subtype>-<id> / status / <part>:<vnode>
         node_type = 'shellyplus'
         device_id = topic[0]
@@ -494,7 +494,7 @@ class FrischluftWorksCO2Sensor(Thing):
         return 'FRISCHLUFT/+/values/raw/co2',
 
     @staticmethod
-    def get_by_mqtt_topic(db, topic: T.List[str]):
+    def get_by_mqtt_topic(db, topic: List[str]):
         # FRISCHLUFT / node / values / raw / co2
         node_type = 'frischluftworks-co2'
         device_id = topic[1]
