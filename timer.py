@@ -23,10 +23,12 @@ from pprint import pformat
 import rules
 
 import config
-import dateutil
+import dateutil.tz
+import logging
+
 tz = dateutil.tz.gettz(getattr(config, "TIMEZONE", "UTC"))
 
-import logging
+
 logger = logging.getLogger("timer")
 
 _functions = {}
@@ -54,7 +56,8 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
         raise RuntimeError("Time at, interval and cron are not supported at the same time")
     func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
-    assert func_hash in _functions, f"{func_name} must be a registered timer function (have the @timer decorator) in order to be used with add_timer"
+    assert func_hash in _functions, f"{func_name} must be a registered timer function " \
+                                    f"(have the @timer decorator) in order to be used with add_timer"
 
     def set_timer_timing(timer):
         now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -105,18 +108,18 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
 def process_timers():
     with shared.db_session_factory() as db:
         now = datetime.datetime.now(tz=datetime.timezone.utc)
-        nowtz = datetime.datetime.now(tz=tz)
+        now_tz = datetime.datetime.now(tz=tz)
         todo = db.query(Timer).filter(Timer.schedule < now).all()
         for timer in todo:
             if timer.function_id not in _functions:
-                logger.warning("Timer '{}' has specifies function_id '{}' which is unknown".format(timer.id, timer.function_id))
+                logger.warning(f"Timer '{timer.id}' has specifies function_id '{timer.function_id}' which is unknown")
                 logger.warning("Known timers: {}".format(pformat(_functions)))
                 continue
             timer_res = _functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None))
             if isinstance(timer, str) and timer_res == "DELETE":
                 db.delete(timer)
             elif "__cron__" in timer.data:
-                timer.schedule = croniter.croniter(timer.data["__cron__"], nowtz).get_next(ret_type=datetime.datetime)
+                timer.schedule = croniter.croniter(timer.data["__cron__"], now_tz).get_next(ret_type=datetime.datetime)
                 logger.info("Scheduled timer '{}' next at at {}".format(timer.id, timer.schedule))
             elif "__interval__" in timer.data:
                 timer.schedule += datetime.timedelta(seconds=timer.data["__interval__"])
