@@ -44,7 +44,7 @@ import mq
 import rules
 import shared
 import timer
-from models.database import DataType, LastSeen, RuleState, State, Thing, Trend, View, User, Timer
+from models.database import DataType, LastSeen, RuleState, State, Thing, Trend, View, User, Timer, TrendMode
 
 try:
     import local_rules
@@ -704,7 +704,7 @@ def collate_states_to_trends(db):
     Iteration is done on a per-thing basis.
     """
 
-    def collate_data(state_data):
+    def collate_data_average(state_data):
         v_min = math.inf
         v_max = -math.inf
         v_sum = 0
@@ -715,6 +715,10 @@ def collate_states_to_trends(db):
 
         v_avg = v_sum / len(state_data)
         return len(state_data), v_min, round(v_avg, 1), v_max
+
+    def collate_data_last(state_data):
+        last = state_data[-1].status_float
+        return len(state_data), last, last, last
 
     now = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -728,6 +732,8 @@ def collate_states_to_trends(db):
         interval_length = datetime.timedelta(minutes=intervals[0][0])
         current_interval = (interval_start - interval_length).replace(tzinfo=datetime.timezone.utc)
 
+        trend_mode = thing.get_trend_mode()
+
         states = db.query(State).filter(State.thing_id == thing.id, State.when < interval_start).order_by(
             State.when.desc()).all()
         data = []
@@ -738,7 +744,11 @@ def collate_states_to_trends(db):
         for state in states:
             if state.when < current_interval:
                 if len(data_bin):
-                    samples, t_min, t_avg, t_max = collate_data(data_bin)
+                    if trend_mode == TrendMode.Average:
+                        samples, t_min, t_avg, t_max = collate_data_average(data_bin)
+                    else:  # if trend_mode == TrendMode.Last:
+                        samples, t_min, t_avg, t_max = collate_data_last(data_bin)
+
                     data.append((current_interval, (samples, t_min, t_avg, t_max)))
                     interval_end = (interval_start - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
                     trend = Trend(thing_id=thing.id, interval=interval_length, start=current_interval, end=interval_end,
@@ -774,7 +784,7 @@ def collate_trends(db):
     In the end there might be buckets which have not been closed. Their content is kept in uncollated in the database.
     """
 
-    def collate_data(trends):
+    def collate_data_average(trends):
         v_min = math.inf
         v_max = -math.inf
         v_sum = 0
@@ -787,6 +797,11 @@ def collate_trends(db):
         v_avg = v_sum / len(trends)
         return count, v_min, round(v_avg, 1), v_max
 
+    def collate_data_last(trends):
+        count = sum(t.samples for t in trends)
+        last = trends[-1].v_max
+        return count, last, last, last
+
     for idx in range(1, len(intervals)):
         prv_len = datetime.timedelta(minutes=intervals[idx - 1][0])
         cur_len = datetime.timedelta(minutes=intervals[idx][0])
@@ -795,20 +810,33 @@ def collate_trends(db):
         interval_end = {}
         interval_data = {}
 
+        def begin_interval(start, thing_id):
+            len_in_minutes = int(cur_len.total_seconds() // 60)
+            interval_start[thing_id] = dt_to_interval_start(start, len_in_minutes).replace(tzinfo=datetime.timezone.utc)
+            ended = interval_start[thing_id] + cur_len - dt_epsilon
+            interval_end[thing_id] = ended.replace(tzinfo=datetime.timezone.utc)
+            interval_data[thing_id] = []
+
         removed = 0
         added = 0
         db.begin_nested()
         for trend in db.query(Trend).filter(Trend.interval == prv_len and Trend.start < keep_after).order_by(
                 Trend.start.asc()).all():
             tid = trend.thing_id
+            trend_mode = TrendMode.Average
+            trend_thing = Thing.query.get(tid)
+            if trend_thing:
+                trend_mode = trend_thing.get_trend_mode()
+
             if interval_start.get(tid) is None:
-                interval_start[tid] = dt_to_interval_start(trend.start, int(cur_len.total_seconds() // 60)).replace(
-                    tzinfo=datetime.timezone.utc)
-                interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
-                interval_data[tid] = []
+                begin_interval(trend.start, tid)
             end = interval_end[tid]
             if trend.start > end:
-                samples, t_min, t_avg, t_max = collate_data(interval_data[tid])
+                if trend_mode == TrendMode.Average:
+                    samples, t_min, t_avg, t_max = collate_data_average(interval_data[tid])
+                else:  # if trend_mode == TrendMode.Last:
+                    samples, t_min, t_avg, t_max = collate_data_last(interval_data[tid])
+
                 coarser_trend = Trend(thing_id=trend.thing_id, interval=cur_len, start=interval_start[tid],
                                       end=interval_end[tid],
                                       samples=samples, t_min=t_min, t_avg=t_avg, t_max=t_max)
@@ -818,10 +846,7 @@ def collate_trends(db):
                 for t in interval_data[tid]:
                     db.delete(t)
 
-                interval_start[tid] = dt_to_interval_start(trend.start, int(cur_len.total_seconds() // 60)).replace(
-                    tzinfo=datetime.timezone.utc)
-                interval_end[tid] = (interval_start[tid] + cur_len - dt_epsilon).replace(tzinfo=datetime.timezone.utc)
-                interval_data[tid] = []
+                begin_interval(trend.start, tid)
             interval_data[tid].append(trend)
         db.commit()  # commit begin_nested
         hklog.debug(f"Collated {removed} trends of {prv_len} into {added} trends of {cur_len}")
