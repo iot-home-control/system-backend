@@ -33,6 +33,12 @@ class DataType(Enum):
     Boolean = 3
 
 
+# Don't forget to update collate_states_to_trends and collate_trends when introducing a new value.
+class TrendMode(Enum):
+    Average = 0
+    Last = 1
+
+
 class DeviceInfo(Base):
     __tablename__ = "device_information"
     device_id = sa.Column(sa.String, primary_key=True)
@@ -200,6 +206,10 @@ class Thing(Base):
     @classmethod
     def display_name(cls):
         return "<undefined>"
+
+    @staticmethod
+    def get_trend_mode():
+        return TrendMode.Average
 
 
 class State(Base):
