@@ -34,7 +34,6 @@ _prefix: Optional[str] = ""
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        print("GET", self.path, self.client_address)
         if self.path == _prefix + "/":
             self.send_response(200)
             self.end_headers()
@@ -61,7 +60,6 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        print("POST", self.path, self.client_address)
         cl = int(self.headers.get("Content-Length"))
         if cl > 0:
             req_data = self.rfile.read(cl)
