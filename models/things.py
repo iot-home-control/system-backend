@@ -318,6 +318,75 @@ class ShellyEnergy(Thing):
         return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
+class ESP32Smartmeter(Thing):
+    def get_data_type(self):
+        return DataType.Float
+
+    def get_state_topic(self):
+        return 'smartmeter/{device_id}/{subtype}/{vnode_id}'.format(device_id=self.device_id, subtype=self.subtype,
+                                                                    vnode_id=self.vnode_id)
+
+    def get_action_topic(self):
+        return None
+
+    def process_status(self, db, state, data):
+        LastSeen.update_last_seen(db, self.device_id, threshold_s=60)
+        state = f"local,{state}"
+        return super().process_status(db, state, data)
+
+
+class ESP32SmartmeterPower(ESP32Smartmeter):
+    __mapper_args__ = {
+        'polymorphic_identity': 'esp32_smartmeter_power'
+    }
+
+    subtype = 'power'
+
+    @classmethod
+    def display_name(cls):
+        return 'ESP32 Power'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'smartmeter/+/power/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: List[str]):
+        # smartmeter / device_id / subtype / vnode
+        node_type = 'esp32_smartmeter_power'
+        device_id = topic[1]
+        subtype = topic[2]  # noqa: unused
+        vnode_id = topic[3]
+
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+
+class ESP32SmartmeterEnergy(ESP32Smartmeter):
+    __mapper_args__ = {
+        'polymorphic_identity': 'esp32_smartmeter_energy'
+    }
+
+    subtype = 'reading'
+
+    @classmethod
+    def display_name(cls):
+        return 'ESP32 Energy'
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return 'smartmeter/+/reading/+',
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: List[str]):
+        # smartmeter / device_id / subtype / vnode
+        node_type = 'esp32_smartmeter_energy'
+        device_id = topic[1]
+        subtype = topic[2]  # noqa: unused
+        vnode_id = topic[3]
+
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+
 class ShellyTRV(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'shellytrv'
@@ -520,4 +589,6 @@ thing_type_table = {
     "shelly_humidity": ShellyHumidity,
     "shellyplus": ShellyPlus,
     "frischluftworks-co2": FrischluftWorksCO2Sensor,
+    "esp32_smartmeter_power": ESP32SmartmeterPower,
+    "esp32_smartmeter_energy": ESP32SmartmeterEnergy,
 }
