@@ -14,7 +14,7 @@
 
 import datetime
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.orm
@@ -37,14 +37,20 @@ class LastSeen(Base):
     last_seen = sa.Column(sa.DateTime(timezone=True))
 
     @classmethod
-    def update_last_seen(cls, db, device_id):
+    def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
         print("Thing {} is alive".format(device_id))
         thing = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
         if not thing:
             thing = LastSeen(device_id=device_id)
             db.add(thing)
-        thing.last_seen = datetime.datetime.now(tz=datetime.timezone.utc)
-        db.commit()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        # Use any() instead of or to get line breaks without using \ line continuation
+        if any((thing.last_seen is None,
+                threshold_s is None,
+                (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now),
+                )):
+            thing.last_seen = now
+            db.commit()
 
 
 thing_state_cache = dict()
