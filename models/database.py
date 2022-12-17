@@ -38,7 +38,6 @@ class LastSeen(Base):
 
     @classmethod
     def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
-        print("Thing {} is alive".format(device_id))
         thing = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
         if not thing:
             thing = LastSeen(device_id=device_id)
@@ -49,6 +48,7 @@ class LastSeen(Base):
                 threshold_s is None,
                 (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now),
                 )):
+            print("Thing {} is alive".format(device_id))
             thing.last_seen = now
             db.commit()
 
