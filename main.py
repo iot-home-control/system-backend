@@ -63,9 +63,9 @@ hklog = logging.getLogger("housekeeping")
 
 request_shutdown = False
 did_shutdown = False
-rule_executor: Optional[threading.Thread] = None
-timer_checker: Optional[threading.Thread] = None
-websocket: Optional[threading.Thread] = None
+rule_executor_thread: Optional[threading.Thread] = None
+timer_checker_thread: Optional[threading.Thread] = None
+websocket_thread: Optional[threading.Thread] = None
 rule_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
@@ -602,14 +602,14 @@ def shutdown():
     print("MQTT", end=", ")
 
     request_shutdown = True
-    rule_executor.join()
+    rule_executor_thread.join()
     print("Rule Execution", end=", ")
 
-    timer_checker.join()
+    timer_checker_thread.join()
     print("Timer Checker", end=", ")
 
     asyncio.run_coroutine_threadsafe(ws_shutdown(), ws_event_loop)
-    websocket.join()
+    websocket_thread.join()
     print("WebSockets", end=", ")
 
     frontend_dev_running = frontend_dev.running()
@@ -654,9 +654,9 @@ def cli():
 @click.option('ssl_key', '--key', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path))
 @click.option('frontend_dir', '--serve-frontend', type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path))
 def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], frontend_dir: Optional[pathlib.Path]):
-    global rule_executor
-    global timer_checker
-    global websocket
+    global rule_executor_thread
+    global timer_checker_thread
+    global websocket_thread
     signal.signal(signal.SIGTERM, shutdown_sig)
     signal.signal(signal.SIGHUP, reload_sig)
 
@@ -667,16 +667,16 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     register_mqtt_topics()
     print("MQTT", end=", ")
 
-    rule_executor = threading.Thread(target=rule_executor_thread_main, args=(rule_queue,))
-    rule_executor.start()
+    rule_executor_thread = threading.Thread(target=rule_executor_thread_main, args=(rule_queue,))
+    rule_executor_thread.start()
     print("Rule Execution", end=", ")
 
-    timer_checker = threading.Thread(target=timer_checker_thread_main)
-    timer_checker.start()
+    timer_checker_thread = threading.Thread(target=timer_checker_thread_main)
+    timer_checker_thread.start()
     print("Timer Checker", end=", ")
 
-    websocket = threading.Thread(target=ws_thread_main, args=((use_ssl, ssl_cert, ssl_key),))
-    websocket.start()
+    websocket_thread = threading.Thread(target=ws_thread_main, args=((use_ssl, ssl_cert, ssl_key),))
+    websocket_thread.start()
     print("WebSockets", end=", ")
 
     grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
