@@ -27,3 +27,6 @@ MQTT_PASS = "password"
 BIND_IP = "127.0.0.1"
 
 TIMEZONE="UTC"
+
+# Remove comment to skip printing new thing states as they are processed
+# LOG_NEW_STATES = False

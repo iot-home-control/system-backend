@@ -568,7 +568,8 @@ def on_mqtt_message(client, userdata, message):
                     return
 
                 def process_thing_status(thing):
-                    print("Thing {} {} sent new state".format(thing.type, thing.name))
+                    if getattr(config, 'LOG_NEW_STATES', True):
+                        print("Thing {} {} sent new state".format(thing.type, thing.name))
                     res = thing.process_status(db, message.payload.decode("ascii"), data)
                     if res[2] == "state":
                         msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
