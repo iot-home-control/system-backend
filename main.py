@@ -22,6 +22,7 @@ import functools
 import json
 import logging
 import math
+import pathlib
 import signal
 import threading
 import time
@@ -489,16 +490,33 @@ async def handle_ws_connection(websocket, path):
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
 
 
-def ws_thread(queue):
+def ws_thread(queue, ssl_data):
     wslog.info("Starting up")
     logging.getLogger("websockets.protocol").setLevel(logging.INFO)
     logging.getLogger("websockets.server").setLevel(logging.INFO)
+
+    bind_ip = getattr(config, "BIND_IP", "127.0.0.1")
+    port = 8765
+
+    use_ssl, ssl_cert, ssl_key = ssl_data
+    ssl_context = None
+    if use_ssl:
+        import ssl
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        try:
+            wslog.info("Enabling SSL")
+            ssl_context.load_cert_chain(ssl_cert, ssl_key)
+            port = 8766
+        except ssl.SSLError as e:
+            wslog.warning(f"Failed to enable SSL: {e}")
+
     try:
         global ws_event_loop
         ws_event_loop = asyncio.new_event_loop()
         # ws_event_loop.set_debug(True)
         asyncio.set_event_loop(ws_event_loop)
-        ws_server = websockets.serve(handle_ws_connection, getattr(config, "BIND_IP", "127.0.0.1"), 8765)
+        ws_server = websockets.serve(handle_ws_connection, bind_ip, port, ssl=ssl_context)
+        wslog.info(f"Listening on {bind_ip}:{port}")
         ws_event_loop.run_until_complete(ws_server)
         ws_event_loop.run_forever()
         wslog.info("Shutting down")
@@ -625,12 +643,16 @@ def cli():
 
 
 @cli.command('run')
-def main():
+@click.option('ssl_cert', '--cert', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path))
+@click.option('ssl_key', '--key', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path))
+def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path]):
     global rule_executor
     global timer_checker
     global websocket
     signal.signal(signal.SIGTERM, shutdown_sig)
     signal.signal(signal.SIGHUP, reload_sig)
+
+    use_ssl = ssl_cert is not None
 
     print("Starting:", end=" ")
     mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
@@ -645,7 +667,7 @@ def main():
     timer_checker.start()
     print("Timer Checker", end=", ")
 
-    websocket = threading.Thread(target=ws_thread, args=(ws_queue,))
+    websocket = threading.Thread(target=ws_thread, args=(ws_queue, (use_ssl, ssl_cert, ssl_key),))
     websocket.start()
     print("WebSockets", end=", ")
 
