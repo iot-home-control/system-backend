@@ -43,11 +43,8 @@ class LastSeen(Base):
             thing = LastSeen(device_id=device_id)
             db.add(thing)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
-        # Use any() instead of or to get line breaks without using \ line continuation
-        if any((thing.last_seen is None,
-                threshold_s is None,
-                (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now),
-                )):
+        if thing.last_seen is None or threshold_s is None \
+                or (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now):
             print("Thing {} is alive".format(device_id))
             thing.last_seen = now
             db.commit()
