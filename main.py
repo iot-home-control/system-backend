@@ -160,7 +160,7 @@ class Session:
         return False
 
 
-def rule_executer_thread(queue):
+def rule_executor_thread_main(queue):
     rulelog.info("Staring up")
     with shared.db_session_factory() as db:
         rules.init(db)
@@ -197,7 +197,7 @@ def rule_executer_thread(queue):
     rulelog.info("Shutting down")
 
 
-def timer_checker_thread():
+def timer_checker_thread_main():
     timerlog.info("Starting up")
     while not request_shutdown:
         try:
@@ -491,7 +491,7 @@ async def handle_ws_connection(websocket, path):
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
 
 
-def ws_thread(queue, ssl_data):
+def ws_thread_main(queue, ssl_data):
     wslog.info("Starting up")
     logging.getLogger("websockets.protocol").setLevel(logging.INFO)
     logging.getLogger("websockets.server").setLevel(logging.INFO)
@@ -668,15 +668,15 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     register_mqtt_topics()
     print("MQTT", end=", ")
 
-    rule_executor = threading.Thread(target=rule_executer_thread, args=(rule_queue,))
+    rule_executor = threading.Thread(target=rule_executor_thread_main, args=(rule_queue,))
     rule_executor.start()
     print("Rule Execution", end=", ")
 
-    timer_checker = threading.Thread(target=timer_checker_thread)
+    timer_checker = threading.Thread(target=timer_checker_thread_main)
     timer_checker.start()
     print("Timer Checker", end=", ")
 
-    websocket = threading.Thread(target=ws_thread, args=(ws_queue, (use_ssl, ssl_cert, ssl_key),))
+    websocket = threading.Thread(target=ws_thread_main, args=(ws_queue, (use_ssl, ssl_cert, ssl_key),))
     websocket.start()
     print("WebSockets", end=", ")
 
