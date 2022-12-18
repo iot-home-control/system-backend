@@ -39,6 +39,7 @@ import websockets
 from itsdangerous import URLSafeSerializer
 
 import config
+import frontend_dev
 import grafana
 import models.things
 import mq
@@ -611,8 +612,14 @@ def shutdown():
     websocket.join()
     print("WebSockets", end=", ")
 
+    frontend_dev_running = frontend_dev.running()
+
     grafana.stop()
-    print("Grafana API")
+    print("Grafana API", end=", " if frontend_dev_running else None)
+
+    if frontend_dev_running:
+        frontend_dev.stop()
+        print("Frontend Webserver")
 
     logging.shutdown()
 
@@ -645,7 +652,8 @@ def cli():
 @cli.command('run')
 @click.option('ssl_cert', '--cert', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path))
 @click.option('ssl_key', '--key', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path))
-def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path]):
+@click.option('frontend_dir', '--serve-frontend', type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path))
+def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], frontend_dir: Optional[pathlib.Path]):
     global rule_executor
     global timer_checker
     global websocket
@@ -672,10 +680,14 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path]):
     print("WebSockets", end=", ")
 
     grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
-    print("Grafana API")
+    print("Grafana API", end=', ' if frontend_dir else None)
     with shared.db_session_factory() as db:
         db.query(Timer).filter(Timer.auto_delete == True).delete()
         db.commit()
+
+    if frontend_dir:
+        frontend_dev.start(frontend_dir, getattr(config, 'BIND_IP', '127.0.0.1'), 8080, (use_ssl, ssl_cert, ssl_key))
+        print("Frontend Webserver")
 
     rules.init_timers()
     # local timers
