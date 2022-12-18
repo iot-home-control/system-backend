@@ -319,6 +319,8 @@ class ShellyEnergy(Thing):
 
 
 class ESP32Smartmeter(Thing):
+    __abstract__ = True
+
     def get_data_type(self):
         return DataType.Float
 
