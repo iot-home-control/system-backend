@@ -67,7 +67,6 @@ rule_executor: Optional[threading.Thread] = None
 timer_checker: Optional[threading.Thread] = None
 websocket: Optional[threading.Thread] = None
 rule_queue = Queue()
-ws_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
 sessions = dict()
@@ -491,7 +490,7 @@ async def handle_ws_connection(websocket, path):
         wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
 
 
-def ws_thread_main(queue, ssl_data):
+def ws_thread_main(ssl_data):
     wslog.info("Starting up")
     logging.getLogger("websockets.protocol").setLevel(logging.INFO)
     logging.getLogger("websockets.server").setLevel(logging.INFO)
@@ -676,7 +675,7 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     timer_checker.start()
     print("Timer Checker", end=", ")
 
-    websocket = threading.Thread(target=ws_thread_main, args=(ws_queue, (use_ssl, ssl_cert, ssl_key),))
+    websocket = threading.Thread(target=ws_thread_main, args=((use_ssl, ssl_cert, ssl_key),))
     websocket.start()
     print("WebSockets", end=", ")
 
