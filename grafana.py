@@ -100,15 +100,24 @@ class Handler(BaseHTTPRequestHandler):
                     display_name = thing.name + " (" + thing.type.capitalize() + ")"
                     datatype = thing.get_data_type()
                     datapoints = []
-                    trends = db.execute(sa.select(Trend)
-                                        .where(Trend.start >= range_start, Trend.end <= range_stop,
-                                               Trend.thing_id == thing.id)
-                                        .order_by(Trend.start)
-                                        ).scalars()
+                    trends_query = sa.select(Trend) \
+                                     .where(Trend.start >= range_start, Trend.end <= range_stop,
+                                            Trend.thing_id == thing.id) \
+                                     .order_by(Trend.start)
 
-                    states = db.execute(sa.select(State.when, data_column_map[datatype])
-                                        .where(State.thing_id == thing.id, State.when.between(range_start, range_stop))
-                                        .order_by(State.when))
+                    if max_data_points == 1:
+                        trends_query = trends_query.limit(1)
+
+                    trends = db.execute(trends_query).scalars()
+
+                    states_query = sa.select(State.when, data_column_map[datatype]) \
+                                     .where(State.thing_id == thing.id, State.when.between(range_start, range_stop)) \
+                                     .order_by(State.when)
+
+                    if max_data_points == 1:
+                        states_query = states_query.limit(1)
+
+                    states = db.execute(states_query)
                     # print("Found", trends.count(), "trends for", thing.name, thing.type, thing.id, "between", range_start, "and", range_stop)
                     for trend in trends.all():
                         when = round((trend.start + trend.interval/2).timestamp()*1000)
