@@ -723,7 +723,7 @@ intervals = [
     (5, datetime.timedelta(days=7)),  # Keep 5-minute intervals for data between 7 days and 4 weeks
     (15, datetime.timedelta(weeks=4)),  # Keep 15-minute intervals for data between 4 weeks (1 month) and 52/2 weeks (6 months, half a year)
     (60, datetime.timedelta(weeks=52 / 2)),  # Keep 1-hour intervals for data between 6 months and 2 years
-    (24 * 60, datetime.timedelta(weeks=52 * 2)),  # Keep 1-day intervals for data older than 2 years
+    # (24 * 60, datetime.timedelta(weeks=52 * 2)),  # Keep 1-day intervals for data older than 2 years
 ]
 dt_epsilon = datetime.timedelta(microseconds=1)
 
