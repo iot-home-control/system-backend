@@ -16,7 +16,7 @@ import json
 from typing import List
 
 import mq
-from models.database import Thing, DataType, LastSeen
+from models.database import Thing, DataType, LastSeen, TrendMode
 
 
 class TemperatureSensor(Thing):
@@ -316,6 +316,10 @@ class ShellyEnergy(Thing):
         device_id = topic[1]
         vnode_id = topic[3]
         return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+    @staticmethod
+    def get_trend_mode():
+        return TrendMode.Last
 
 
 class ESP32Smartmeter(Thing):
