@@ -168,7 +168,10 @@ class Handler(BaseHTTPRequestHandler):
                             interval_index += 1
                             continue
 
-                        assert datapoints[dp_index][1] > current_interval, f'Constraints failed\n{current_interval=},\n{datapoints[dp_index][1]=}\n{dp_index=}/{len(datapoints) - 1}, {interval_index=}/{len(interval_points) - 1}'
+                        assert datapoints[dp_index][1] > current_interval,\
+                            f'Constraints failed\n{current_interval=},\n' \
+                            f'{datapoints[dp_index][1]=}\n' \
+                            f'{dp_index=}/{len(datapoints) - 1}, {interval_index=}/{len(interval_points) - 1}'
 
                         dp_left = datapoints[dp_index - 1]
                         dp_right = datapoints[dp_index]
@@ -179,7 +182,8 @@ class Handler(BaseHTTPRequestHandler):
                             interval_index += 1
                             continue
 
-                        assert dp_left[1] < current_interval <= dp_right[1], f'Constraints failed\n{dp_left[1]=},\n{current_interval=},\n{dp_right[1]=}'
+                        assert dp_left[1] < current_interval <= dp_right[1],\
+                            f'Constraints failed\n{dp_left[1]=},\n{current_interval=},\n{dp_right[1]=}'
                         timediff = dp_right[1] - dp_left[1]
                         assert timediff.total_seconds() > 0
                         f = (current_interval - dp_left[1]) / timediff
