@@ -133,8 +133,7 @@ class Handler(BaseHTTPRequestHandler):
                             datapoints.append([value, when])
 
                     if len(datapoints) == 0:
-                        print("no dp")
-                        resp.append(dict(target=display_name, datapoints=datapoints))
+                        resp.append(dict(target=display_name, datapoints=[]))
 
                     interval_points = []
 
