@@ -106,17 +106,11 @@ class Handler(BaseHTTPRequestHandler):
                                             Trend.thing_id == thing.id) \
                                      .order_by(Trend.start)
 
-                    if max_data_points == 1:
-                        trends_query = trends_query.limit(1)
-
                     trends = db.execute(trends_query).scalars()
 
                     states_query = sa.select(State.when, data_column_map[datatype]) \
                                      .where(State.thing_id == thing.id, State.when.between(range_start, range_stop)) \
                                      .order_by(State.when)
-
-                    if max_data_points == 1:
-                        states_query = states_query.limit(1)
 
                     states = db.execute(states_query)
                     for trend in trends.all():
