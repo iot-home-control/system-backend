@@ -82,20 +82,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
 
+            payload_options = [dict(label="Fill Gaps", name="fill-gaps", type="select", placeholder="No",
+                                    reloadMetric=True)]
+
             with db_session_factory() as db:
                 rows = db.execute(sa.select(Thing.id, Thing.name, Thing.type).order_by(Thing.id))
                 resp = []
                 for i, n, t in rows:
-                    entry = dict(label=n + " (" + t.capitalize() + ")", value=i)
+                    entry = dict(label=n + " (" + t.capitalize() + ")", value=i, payloads=payload_options)
                     resp.append(entry)
         elif self.path == _prefix + "/metric-payload-options":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             resp = [
+                dict(label="Yes", value=True),
+                dict(label="No", value=False),
             ]
         elif self.path == _prefix + "/query":
-            targets = [t["target"] for t in req["targets"] if t.get("type", "timeseries") == "timeseries"]
+            targets = [(t["target"], t.get("payload")) for t in req["targets"] if t.get("type", "timeseries") == "timeseries"]
             timerange = req["range"]
             range_start = dateutil.parser.parse(timerange["from"]).replace(microsecond=0)
             range_stop = dateutil.parser.parse(timerange["to"]).replace(microsecond=0)
@@ -109,12 +114,14 @@ class Handler(BaseHTTPRequestHandler):
 
             with db_session_factory() as db:
                 resp = []
-                for target in targets:
+                for target, payload in targets:
                     if not target:
                         continue
                     thing = db.query(Thing).get(target)
                     if not thing:
                         continue
+
+                    fill_gaps = payload.get("fill-gaps", "false").lower() in ["true", "y", "yes"]
                     display_name = thing.name + " (" + thing.type.capitalize() + ")"
                     datatype = thing.get_data_type()
                     datapoints = []
@@ -185,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                         dp_left = datapoints[dp_index - 1]
                         dp_right = datapoints[dp_index]
 
-                        if dp_right[1] > interval_points[interval_index][2]:
+                        if not fill_gaps and dp_right[1] > interval_points[interval_index][2]:
                             # If the point we looked at is outside the interval (no points between the one before the
                             # interval and this one after it), look at the next interval.
                             interval_index += 1
