@@ -77,6 +77,23 @@ class Handler(BaseHTTPRequestHandler):
             with db_session_factory() as db:
                 rows = db.execute(sa.select(Thing.id, Thing.name, Thing.type).order_by(Thing.id))
                 resp = [{"text": n + " (" + t.capitalize() + ")", "value": i} for i, n, t in rows]
+        elif self.path == _prefix + "/metrics":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+
+            with db_session_factory() as db:
+                rows = db.execute(sa.select(Thing.id, Thing.name, Thing.type).order_by(Thing.id))
+                resp = []
+                for i, n, t in rows:
+                    entry = dict(label=n + " (" + t.capitalize() + ")", value=i)
+                    resp.append(entry)
+        elif self.path == _prefix + "/metric-payload-options":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            resp = [
+            ]
         elif self.path == _prefix + "/query":
             targets = [t["target"] for t in req["targets"] if t.get("type", "timeseries") == "timeseries"]
             timerange = req["range"]
