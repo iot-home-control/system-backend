@@ -192,7 +192,6 @@ class Handler(BaseHTTPRequestHandler):
 
                         interval_index += 1
 
-                    print(interval_ms, len(resampled), "<-", len(datapoints), max_data_points)
                     resp.append(dict(target=display_name, datapoints=resampled))
 
             self.send_response(200)
