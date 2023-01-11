@@ -120,10 +120,9 @@ class Handler(BaseHTTPRequestHandler):
 
                     states = db.execute(states_query)
                     for trend in trends.all():
-                        when = round((trend.start + trend.interval/2).timestamp()*1000)
                         if trend.t_avg is None or math.isnan(trend.t_avg):
                             continue
-                        datapoints.append([trend.t_avg, when])
+                        datapoints.append([trend.t_avg, trend.start + trend.interval/2])
                     for when, value in states:
                         if value is None:
                             continue
