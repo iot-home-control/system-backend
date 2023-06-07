@@ -122,6 +122,9 @@ Timers with `at` will be kept after a restart as they default to `False` for the
 
 Timers with `at` schedule will be executed at the scheduled time or later, when the system backend is restarted, if it was not running at the originally scheduled time unless `auto_delete` was set to `True` in `add_timer`.
 
+The timer module has the function `is_scheduled(timer_id)` which can be called in `local_rules.py`.
+The function returns `True` if there is a timer in database with given `timer_id` and its `schedule` is in the future, otherwise it returns `False`.
+
 ### Examples
 
 **Switch on a lamp with a detached switch.**

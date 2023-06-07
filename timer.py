@@ -126,3 +126,12 @@ def process_timers():
             else:
                 db.delete(timer)
             db.commit()
+
+
+def is_scheduled(timer_id):
+    with shared.db_session_factory() as db:
+        t = db.query(Timer).filter_by(id=timer_id).one_or_none()
+    if t is None:
+        return False
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    return t.schedule >= now
