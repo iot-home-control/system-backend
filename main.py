@@ -301,6 +301,7 @@ async def ws_type_create_or_edit(db, websocket, data):
         data['device_id'] = thing.device_id
         data['vnode'] = thing.vnode_id
         data['visible'] = thing.visible
+        data['ordering'] = thing.ordering
 
     await websocket.send(json.dumps(dict(type="edit_data", kind="thing", data=data)))
 
@@ -321,6 +322,10 @@ async def ws_type_edit_save(db, websocket, data):
         thing.device_id = data['device_id']
         thing.vnode_id = data['vnode']
         thing.visible = data['visible']
+        ordering = data["ordering"] if "ordering" in data else None
+        if ordering is not None and ordering.isnumeric():
+            ordering = int(ordering)
+        thing.ordering = ordering
         prev_views = set(thing.views)
         thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
         db.commit()
@@ -436,7 +441,7 @@ async def handle_ws_connection(websocket, path):
         if session.permission == "authenticated" or session.scope == "local":
             with shared.db_session_factory() as db:
                 await websocket.send(json.dumps(dict(type="auth_ok", level=session.to_access_level())))
-                known_things = db.query(Thing).order_by(Thing.id).all()
+                known_things = db.query(Thing).order_by(Thing.ordering, Thing.name).all()
                 msg = dict(type="things", things=[t.to_dict() for t in known_things])
                 await websocket.send(json.dumps(msg))
 
