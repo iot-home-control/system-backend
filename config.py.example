@@ -30,3 +30,6 @@ TIMEZONE="UTC"
 
 # Remove comment to skip printing new thing states as they are processed
 # LOG_NEW_STATES = False
+
+# Remove comment to skip printing notifications when things get marked as alive
+# LOG_THINGS_ALIVE = False

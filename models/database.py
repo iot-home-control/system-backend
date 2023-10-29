@@ -21,6 +21,8 @@ import sqlalchemy.orm
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
 
+import config
+
 Base = declarative_base()
 
 
@@ -45,7 +47,8 @@ class LastSeen(Base):
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         if thing.last_seen is None or threshold_s is None \
                 or (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now):
-            print("Thing {} is alive".format(device_id))
+            if getattr(config, 'LOG_THING_ALIVE', True):
+                print("Thing {} is alive".format(device_id))
             thing.last_seen = now
             db.commit()
 
