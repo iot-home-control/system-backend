@@ -69,6 +69,7 @@ class Thing(Base):
                                        .where(LastSeen.device_id == device_id)
                                        .scalar_subquery())
     views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic", back_populates="things")
+    ordering = sa.Column(sa.Integer)
 
     __mapper_args__ = {
         'polymorphic_on': type,
