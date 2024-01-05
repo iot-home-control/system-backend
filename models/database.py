@@ -43,7 +43,7 @@ class DeviceInfo(Base):
     data = sa.Column(sa.JSON(), nullable=True)
 
     @classmethod
-    def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
+    def update_device_info(cls, db, device_id, threshold_s: Optional[int] = None):
         device_info = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
         if not device_info:
             device_info = DeviceInfo(device_id=device_id)

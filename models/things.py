@@ -151,7 +151,7 @@ class Shelly(Switch):
 
     def process_status(self, db, state, data):
         last_state = self.last_state(db)
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         if last_state is None or last_state.status_bool != (state.lower() in ["on", "yes", "true", "1"]):
             state = f"unknown,{state}"
             return super().process_status(db, state, data)
@@ -187,7 +187,7 @@ class ShellyTemperature(TemperatureSensor):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         state = f"unknown,{state}"
         return super().process_status(db, state, data)
 
@@ -221,7 +221,7 @@ class ShellyHumidity(HumiditySensor):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         state = f"unknown,{state}"
         return super().process_status(db, state, data)
 
@@ -258,7 +258,7 @@ class ShellyPower(Thing):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         state = f"unknown,{state}"
         return super().process_status(db, state, data)
 
@@ -297,7 +297,7 @@ class ShellyEnergy(Thing):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         state = f"unknown,{state}"
         return super().process_status(db, state, data)
 
@@ -332,7 +332,7 @@ class ESP32Smartmeter(Thing):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id, threshold_s=60)
+        DeviceInfo.update_device_info(db, self.device_id, threshold_s=60)
         state = f"local,{state}"
         return super().process_status(db, state, data)
 
@@ -416,7 +416,7 @@ class ShellyTRV(Thing):
         mq.publish(self.get_action_topic(), value)
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         try:
             data = json.loads(state)
             state = data.get("thermostats")[self.vnode_id].get("target_t").get("value")
@@ -509,7 +509,7 @@ class ShellyPlus(Switch):
         return "{device_id}/rpc".format(device_id=self.device_id)
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         try:
             data = json.loads(state)
         except json.JSONDecodeError:
@@ -553,7 +553,7 @@ class FrischluftWorksCO2Sensor(Thing):
         return None
 
     def process_status(self, db, state, data):
-        DeviceInfo.update_last_seen(db, self.device_id)
+        DeviceInfo.update_device_info(db, self.device_id)
         state = f"local,{state}"
         return super().process_status(db, state, data)
 
