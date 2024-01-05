@@ -33,16 +33,16 @@ class DataType(Enum):
     Boolean = 3
 
 
-class LastSeen(Base):
-    __tablename__ = "last_seen"
+class DeviceInfo(Base):
+    __tablename__ = "device_information"
     device_id = sa.Column(sa.String, primary_key=True)
     last_seen = sa.Column(sa.DateTime(timezone=True))
 
     @classmethod
     def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
-        thing = db.query(LastSeen).filter_by(device_id=device_id).one_or_none()
+        thing = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
         if not thing:
-            thing = LastSeen(device_id=device_id)
+            thing = DeviceInfo(device_id=device_id)
             db.add(thing)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         if thing.last_seen is None or threshold_s is None \
@@ -65,8 +65,8 @@ class Thing(Base):
     vnode_id = sa.Column(sa.Integer, default=0)
     visible = sa.Column(sa.Boolean, default=True)
     last_seen = sa.orm.column_property(sa
-                                       .select(LastSeen.last_seen)
-                                       .where(LastSeen.device_id == device_id)
+                                       .select(DeviceInfo.last_seen)
+                                       .where(DeviceInfo.device_id == device_id)
                                        .scalar_subquery())
     views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic", back_populates="things")
     ordering = sa.Column(sa.Integer)

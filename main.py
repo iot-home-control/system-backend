@@ -46,7 +46,7 @@ import mq
 import rules
 import shared
 import timer
-from models.database import DataType, LastSeen, RuleState, State, Thing, Trend, View, User, Timer
+from models.database import DataType, DeviceInfo, RuleState, State, Thing, Trend, View, User, Timer
 
 try:
     import local_rules
@@ -561,7 +561,7 @@ def on_mqtt_message(client, userdata, message):
         with shared.db_session_factory() as db:
             if message.topic.startswith("alive"):
                 device_id = message.payload.decode("ascii")
-                LastSeen.update_last_seen(db, device_id)
+                DeviceInfo.update_last_seen(db, device_id)
             else:
                 split_topic = message.topic.split("/")
                 thing_cls = get_thing_cls(split_topic)
