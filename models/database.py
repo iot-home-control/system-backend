@@ -51,8 +51,6 @@ class DeviceInfo(Base):
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         if device_info.last_seen is None or threshold_s is None \
                 or (threshold_s is not None and device_info.last_seen + datetime.timedelta(seconds=threshold_s) < now):
-            if getattr(config, 'LOG_THING_ALIVE', True):
-                print("Thing {} is alive".format(device_id))
             device_info.last_seen = now
             db.commit()
 
