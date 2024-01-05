@@ -43,14 +43,35 @@ class DeviceInfo(Base):
     data = sa.Column(sa.JSON(), nullable=True)
 
     @classmethod
-    def update_device_info(cls, db, device_id, threshold_s: Optional[int] = None):
+    def update_device_info(cls, db, device_id, threshold_s: Optional[int] = None, **infos):
         device_info = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
         if not device_info:
             device_info = DeviceInfo(device_id=device_id)
             db.add(device_info)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
-        if device_info.last_seen is None or threshold_s is None \
-                or (threshold_s is not None and device_info.last_seen + datetime.timedelta(seconds=threshold_s) < now):
+
+        # Add anything that shouldn't be updated by infos kwargs to this list.
+        for reserved in ("device_id", "last_seen", "data"):
+            infos.pop(reserved, None)
+
+        infos_changed = False
+
+        for key, value in infos.items():
+            if hasattr(device_info, key):
+                if getattr(device_info, key) != value:
+                    infos_changed = True
+                    setattr(device_info, key, value)
+            else:
+                if key not in device_info or device_info[key] != value:
+                    infos_changed = True
+                    device_info[key] = value
+                    device_info.data.flag_modified()
+
+        if any((infos_changed,
+                device_info.last_seen is None,
+                threshold_s is None,
+                (threshold_s is not None and device_info.last_seen + datetime.timedelta(seconds=threshold_s) < now),
+                )):
             device_info.last_seen = now
             db.commit()
 
