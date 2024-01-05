@@ -40,16 +40,16 @@ class DeviceInfo(Base):
 
     @classmethod
     def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
-        thing = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
-        if not thing:
-            thing = DeviceInfo(device_id=device_id)
-            db.add(thing)
+        device_info = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
+        if not device_info:
+            device_info = DeviceInfo(device_id=device_id)
+            db.add(device_info)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
-        if thing.last_seen is None or threshold_s is None \
-                or (threshold_s is not None and thing.last_seen + datetime.timedelta(seconds=threshold_s) < now):
+        if device_info.last_seen is None or threshold_s is None \
+                or (threshold_s is not None and device_info.last_seen + datetime.timedelta(seconds=threshold_s) < now):
             if getattr(config, 'LOG_THING_ALIVE', True):
                 print("Thing {} is alive".format(device_id))
-            thing.last_seen = now
+            device_info.last_seen = now
             db.commit()
 
 
