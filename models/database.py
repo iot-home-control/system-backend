@@ -37,6 +37,10 @@ class DeviceInfo(Base):
     __tablename__ = "device_information"
     device_id = sa.Column(sa.String, primary_key=True)
     last_seen = sa.Column(sa.DateTime(timezone=True))
+    ip_addr = sa.Column(sa.String, nullable=True)
+    firmware_version = sa.Column(sa.String, nullable=True)
+    is_updatable = sa.Column(sa.Boolean, nullable=True)
+    data = sa.Column(sa.JSON(), nullable=True)
 
     @classmethod
     def update_last_seen(cls, db, device_id, threshold_s: Optional[int] = None):
