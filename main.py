@@ -544,7 +544,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         return
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
-        ts = get_mqtt_topics() + ["alive"]
+        ts = get_mqtt_topics() + ["alive", "shellies/announce"]
         client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
@@ -571,6 +571,17 @@ def on_mqtt_message(client, userdata, message):
                 except json.JSONDecodeError:
                     device_id = message.payload.decode("ascii")
 
+                DeviceInfo.update_device_info(db, device_id, **infos)
+            elif message.topic.startswith("shellies/announce"):
+                infos = dict()
+                try:
+                    decoded = json.loads(message.payload.decode("ascii"))
+                    device_id = decoded.get("id")
+                    infos["ip_addr"] = decoded.get("ip", None)
+                    infos["firmware_version"] = decoded.get("fw_id", decoded.get("fw_ver", None))
+                    infos["is_updatable"] = decoded.get("new_fw", None)
+                except json.JSONDecodeError:
+                    return
                 DeviceInfo.update_device_info(db, device_id, **infos)
             else:
                 split_topic = message.topic.split("/")
