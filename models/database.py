@@ -62,10 +62,10 @@ class DeviceInfo(Base):
                     infos_changed = True
                     setattr(device_info, key, value)
             else:
-                if key not in device_info or device_info[key] != value:
+                if key not in device_info.data or device_info.data[key] != value:
                     infos_changed = True
-                    device_info[key] = value
-                    device_info.data.flag_modified()
+                    device_info.data[key] = value
+                    sa.orm.attributes.flag_modified(device_info, "data")
 
         if any((infos_changed,
                 device_info.last_seen is None,
