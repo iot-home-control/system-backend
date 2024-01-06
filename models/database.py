@@ -46,6 +46,8 @@ class DeviceInfo(Base):
     def update_device_info(cls, db, device_id, threshold_s: Optional[int] = None, **infos):
         device_info = db.query(DeviceInfo).filter_by(device_id=device_id).one_or_none()
         if not device_info:
+            if db.query(Thing).filter_by(device_id=device_id).first_or_none() is None:
+                return
             device_info = DeviceInfo(device_id=device_id)
             db.add(device_info)
         now = datetime.datetime.now(tz=datetime.timezone.utc)
