@@ -40,7 +40,7 @@ class DeviceInfo(Base):
     ip_addr = sa.Column(sa.String, nullable=True)
     firmware_version = sa.Column(sa.String, nullable=True)
     is_updatable = sa.Column(sa.Boolean, nullable=True)
-    data = sa.Column(sa.JSON(), nullable=True)
+    data = sa.Column(sa.JSON(), nullable=False, default=dict)
 
     @classmethod
     def update_device_info(cls, db, device_id, threshold_s: Optional[int] = None, **infos):
