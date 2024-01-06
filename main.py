@@ -560,8 +560,18 @@ def on_mqtt_message(client, userdata, message):
     try:
         with shared.db_session_factory() as db:
             if message.topic.startswith("alive"):
-                device_id = message.payload.decode("ascii")
-                DeviceInfo.update_device_info(db, device_id)
+                infos = dict()
+                try:
+                    decoded = json.loads(message.payload.decode("ascii"))
+                    device_id = decoded.pop("device_id")
+                    infos["ip_addr"] = decoded.pop("local_ip", None)
+                    infos["firmware_version"] = decoded.pop("git_version", None)
+                    infos["is_updatable"] = decoded.pop("update_available", None)
+                    infos.update(decoded)
+                except json.JSONDecodeError:
+                    device_id = message.payload.decode("ascii")
+
+                DeviceInfo.update_device_info(db, device_id, **infos)
             else:
                 split_topic = message.topic.split("/")
                 thing_cls = get_thing_cls(split_topic)
