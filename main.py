@@ -38,6 +38,7 @@ import sqlalchemy.exc
 import websockets
 from itsdangerous import URLSafeSerializer
 
+import builtin_rules
 import config
 import frontend_dev
 import grafana
@@ -70,6 +71,7 @@ rule_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
 connected_wss = set()
 sessions = dict()
+current_mqtt_connect_subscribe_mid: Optional[int] = None
 
 cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
@@ -545,7 +547,8 @@ def on_mqtt_connect(client, userdata, flags, rc):
     else:
         mqttlog.info("Connected to MQTT broker. Subscribing topics.")
         ts = get_mqtt_topics() + ["alive", "shellies/announce"]
-        client.subscribe(list(zip(ts, [0] * len(ts))))
+        global current_mqtt_connect_subscribe_mid
+        _, current_mqtt_connect_subscribe_mid = client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
 def on_mqtt_disconnect(client, userdata, rc):
@@ -554,6 +557,13 @@ def on_mqtt_disconnect(client, userdata, rc):
     else:
         mqttlog.warning("Connection to MQTT broker lost. Reconnecting.")
         client.connect_async(config.MQTT_HOST)
+
+
+def on_mqtt_subscribe(client, _userdata, mid, _reason_codes_or_qos, _properties=None):
+    global current_mqtt_connect_subscribe_mid
+    if current_mqtt_connect_subscribe_mid == mid:
+        current_mqtt_connect_subscribe_mid = None
+        client.publish("shellies/command", "announce")
 
 
 def on_mqtt_message(client, userdata, message):
@@ -662,7 +672,7 @@ def reload():
     with shared.db_session_factory() as db:
         for thing in db.query(Thing).all():
             thing.last_state(db)
-    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message, on_mqtt_subscribe)
 
 
 # noinspection PyUnusedLocal
@@ -689,7 +699,7 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     use_ssl = ssl_cert is not None
 
     print("Starting:", end=" ")
-    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message)
+    mq.start(config, on_mqtt_connect, on_mqtt_disconnect, on_mqtt_message, on_mqtt_subscribe)
     register_mqtt_topics()
     print("MQTT", end=", ")
 
@@ -716,6 +726,7 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
         print("Frontend Webserver")
 
     rules.init_timers()
+    builtin_rules.init_timers()
     # local timers
     try:
         local_rules.init_timers()
