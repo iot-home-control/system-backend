@@ -324,10 +324,11 @@ async def ws_type_edit_save(db, websocket, data):
         thing.device_id = data['device_id']
         thing.vnode_id = data['vnode']
         thing.visible = data['visible']
-        ordering = data["ordering"] if "ordering" in data else None
+        ordering = data.get("ordering")
         if ordering is not None and ordering.isnumeric():
-            ordering = int(ordering)
-        thing.ordering = ordering
+            thing.ordering = int(ordering)
+        else:
+            thing.ordering = None
         prev_views = set(thing.views)
         thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
         db.commit()
