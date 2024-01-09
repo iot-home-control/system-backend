@@ -7,7 +7,7 @@ import mq
 
 @timer.timer
 @rules.rule("Request Shelly announces")
-def _request_shelly_announces():
+def _request_shelly_announces(event):
     mq.publish("shellies/command", "announce")
 
 
