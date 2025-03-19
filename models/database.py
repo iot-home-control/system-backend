@@ -225,6 +225,7 @@ class Timer(Base):
     id = sa.Column(sa.String, primary_key=True)
     schedule = sa.Column(sa.DateTime(timezone=True), nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
+    enabled = sa.Column(sa.Boolean, default=True, nullable=False)
     data = sa.Column(MutableDict.as_mutable(sa.JSON), nullable=False, default=lambda: {})
     auto_delete = sa.Column(sa.Boolean)
 

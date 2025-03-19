@@ -73,10 +73,17 @@ connected_wss = set()
 sessions = dict()
 current_mqtt_connect_subscribe_mid: Optional[int] = None
 
-cookie_serializer = URLSafeSerializer(config.SECRET_KEY, "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
+cookie_serializer = URLSafeSerializer(config.SECRET_KEY,
+                                      "websocket")  # Param 2 is a salt/context-id. Not really important what is in there.
 
 mqtt_topics = {}
 TOPIC_LEAF = "<LEAF>"
+
+
+def serialize_datetime(obj):
+    if isinstance(obj, datetime.datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 
 def register_mqtt_topic(pattern, cls):
@@ -85,9 +92,10 @@ def register_mqtt_topic(pattern, cls):
     for i, part in enumerate(parts):
         cur.setdefault(part, dict())
         cur = cur[part]
-        if i+1 >= len(parts):
+        if i + 1 >= len(parts):
             if TOPIC_LEAF in cur:
-                raise ValueError(f"Can't register {cls} with pattern {pattern}: Already registered on {cur[TOPIC_LEAF]}.")
+                raise ValueError(
+                    f"Can't register {cls} with pattern {pattern}: Already registered on {cur[TOPIC_LEAF]}.")
             cur[TOPIC_LEAF] = cls
 
 
@@ -346,6 +354,80 @@ async def ws_type_edit_save(db, websocket, data):
             mq.subscribe(thing.get_state_topic())
 
 
+@check_access(level=AccessLevel.Authenticated)
+async def ws_create_or_edit_timer(db, websocket, data):
+    """
+    {
+        "id": "Request Shelly announces",
+        "schedule": "2025-02-10T16:38:14.576916+01:00",
+        "enabled": true,
+        "data": {
+            "__interval__": 86400,
+            "kwargs": {}
+        }
+    }
+    """
+    timer_data = data.get('data')
+    if not timer_data:
+        return
+    timer_id = timer_data.get("id")
+    errors = []
+    if timer_id is None:
+        await ws_get_timers(db, websocket, {"msg": "No timer name was given."})
+        return
+    timer_obj = db.query(Timer).filter_by(id=timer_id).one_or_none()
+
+    if timer_obj is None:
+        timer_obj = Timer()
+        timer_obj.id = timer_id
+        timer_obj.data = {}
+        db.add(timer_obj)
+    schedule = timer_data.get("schedule")
+    if schedule is not None:
+        try:
+            print(schedule)
+            timer_obj.schedule = datetime.datetime.fromisoformat(schedule)
+        except ValueError as e:
+            errors.append("Please send a valid date string.")
+    enabled = timer_data.get("enabled")
+    if enabled is not None:
+        timer_obj.enabled = bool(enabled)
+
+    rule_index =  {idx: rule for idx, rule in enumerate(rules.all_rules.items()) if rule[0] in timer.functions.values()}
+    rule_id = timer_data.get("rule_id")
+    if rule_id is not None:
+        rule = rule_index.get(int(rule_id))
+        if rule is not None:
+            func_hash = str(timer.fnv1a(rule[0].__name__.encode()))
+            timer_obj.function_id = func_hash
+        else:
+            errors.append("Invalid rule set")
+
+    data_from_dict = timer_data.get("data")
+    if data_from_dict is not None:
+        try:
+            timer_obj.data.update(data_from_dict)
+        except ValueError as e:
+            errors.append("Please send a valid dictionary.")
+    if not errors:
+        db.commit()
+        await ws_get_timers(db, websocket, {"msg": f"Timer {timer_obj.id} saved"})
+    else:
+        await ws_get_timers(db, websocket, {"msg": "\n".join(errors)})
+
+
+@check_access(level=AccessLevel.Authenticated)
+async def ws_get_timers(db, websocket, data):
+    timers = db.query(Timer).all()
+    timers_list = []
+    rule_index = {rule[1]: idx for idx, rule in enumerate(rules.all_rules.items()) if rule[0] in timer.functions.values()}
+    for timer_obj in timers:
+        timers_list.append({"id": timer_obj.id, "schedule": timer_obj.schedule, "enabled": timer_obj.enabled, "data": timer_obj.data, "rule_id": rule_index[rules.all_rules[timer.functions[timer_obj.function_id]]]})
+    await websocket.send(json.dumps(dict(type="timers", value=timers_list, rules=rule_index), default=serialize_datetime))
+    if "msg" in data:
+        await websocket.send(json.dumps(dict(type="msg", value=data["msg"])))
+
+
 async def new_ws_session(websocket):
     import ipaddress
     real_peer_address = websocket.request_headers.get("X-Real-IP", websocket.remote_address[0])
@@ -486,6 +568,10 @@ async def handle_ws_connection(websocket, path):
                     await ws_authenticate(db, websocket, data, session)
                 elif msg_type == "rules":
                     await send_rules(db, websocket, data)
+                elif msg_type == "get_timers":
+                    await ws_get_timers(db, websocket, data)
+                elif msg_type == "timer":
+                    await ws_create_or_edit_timer(db, websocket, data)
                 else:
                     wslog.warning("Unknown msg_type {}".format(msg_type))
         else:

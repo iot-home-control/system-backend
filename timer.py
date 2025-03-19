@@ -31,7 +31,7 @@ tz = dateutil.tz.gettz(getattr(config, "TIMEZONE", "UTC"))
 
 logger = logging.getLogger("timer")
 
-_functions = {}
+functions = {}
 
 
 def fnv1a(xs):
@@ -43,20 +43,18 @@ def fnv1a(xs):
         h = (h * 0x100000001b3) & 2**64-1
     return h
 
-
 def timer(func):
     func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
-    _functions[func_hash] = func
+    functions[func_hash] = func
     return func
 
-
-def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=None):
+def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=None, **kwargs):
     if at and interval and cron:
         raise RuntimeError("Time at, interval and cron are not supported at the same time")
     func_name = func.__name__
     func_hash = str(fnv1a(func_name.encode()))
-    assert func_hash in _functions, f"{func_name} must be a registered timer function " \
+    assert func_hash in functions, f"{func_name} must be a registered timer function " \
                                     f"(have the @timer decorator) in order to be used with add_timer"
 
     def set_timer_timing(timer):
@@ -75,6 +73,7 @@ def add_timer(timer_id, func, at=None, interval=None, cron=None, auto_delete=Non
             timer.data["__interval__"] = interval.total_seconds()
         else:
             raise RuntimeError("Timer is neither at, interval nor cron")
+        timer.data["kwargs"] = kwargs
 
     """Default behaviour of auto_delete
     at: auto_delete=False i.e. they will be executed after a reboot
@@ -111,11 +110,11 @@ def process_timers():
         now_tz = datetime.datetime.now(tz=tz)
         todo = db.query(Timer).filter(Timer.schedule < now).all()
         for timer in todo:
-            if timer.function_id not in _functions:
+            if timer.function_id not in functions:
                 logger.warning(f"Timer '{timer.id}' has specifies function_id '{timer.function_id}' which is unknown")
-                logger.warning("Known timers: {}".format(pformat(_functions)))
+                logger.warning("Known timers: {}".format(pformat(functions)))
                 continue
-            timer_res = _functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None))
+            timer_res = functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None), **timer.data.get("kwargs", {}))
             if isinstance(timer, str) and timer_res == "DELETE":
                 db.delete(timer)
             elif "__cron__" in timer.data:
