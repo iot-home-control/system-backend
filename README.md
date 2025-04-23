@@ -17,6 +17,7 @@ The System Backend has support for rules and timers written in Python.
 ## Documentation:
 - [Installation guide](docs/install.md)
 - [Rule writing guide](docs/rules.md)
+- [MQTT topic structure](docs/mqtt_structure.md)
 
 ## Development guide
 - [How to run the test/development environment](docs/development.md)
