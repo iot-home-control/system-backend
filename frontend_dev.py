@@ -25,7 +25,7 @@ _server: Optional[ThreadingHTTPServer] = None
 log = logging.getLogger('frontend-dev')
 
 
-def start(frontend_dir: pathlib.Path, bind_addr: str, port: int,
+def start(frontend_dir: pathlib.Path, bind_addr: str, http_port: int, https_port: int,
           ssl_data: Tuple[bool, pathlib.Path, Optional[pathlib.Path]]):
     global _server
 
@@ -37,27 +37,30 @@ def start(frontend_dir: pathlib.Path, bind_addr: str, port: int,
             # SimpleHTTPRequestHandler which takes that kwarg
             self.RequestHandlerClass(request, client_address, self, directory=frontend_dir)  # noqa
 
+    listen_port = http_port
     use_ssl, ssl_cert, ssl_key = ssl_data
     ssl_context = None
+    listen_extra = ""
     if use_ssl:
         import ssl
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         try:
             log.info("Enabling SSL")
             ssl_context.load_cert_chain(ssl_cert, ssl_key)
-            port = 8443
+            listen_port = https_port
+            listen_extra = " with HTTPS"
         except ssl.SSLError as e:
             log.warning(f"Failed to enable SSL: {e}")
             use_ssl = False
 
-    _server = Server((bind_addr, port), SimpleHTTPRequestHandler)
+    _server = Server((bind_addr, listen_port), SimpleHTTPRequestHandler)
 
     if use_ssl:
         _server.socket = ssl_context.wrap_socket(_server.socket, server_side=True)
         _server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         _server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
-    log.info(f"Serving {frontend_dir} on {bind_addr}:{port}")
+    log.info(f"Serving {frontend_dir} on {bind_addr}:{listen_port}{listen_extra}")
 
     _server_thread = threading.Thread(target=_server.serve_forever)
     _server_thread.daemon = True

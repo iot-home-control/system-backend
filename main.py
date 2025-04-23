@@ -504,7 +504,7 @@ def ws_thread_main(ssl_data):
     logging.getLogger("websockets.server").setLevel(logging.INFO)
 
     bind_ip = getattr(config, "BIND_IP", "127.0.0.1")
-    port = 8765
+    port = getattr(config, "WS_PORT", 8765)
 
     use_ssl, ssl_cert, ssl_key = ssl_data
     ssl_context = None
@@ -716,14 +716,20 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     websocket_thread.start()
     print("WebSockets", end=", ")
 
-    grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
+    grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'),
+                  port=getattr(config, 'API_PORT', 8000),
+                  prefix="/grafana")
     print("Grafana API", end=', ' if frontend_dir else None)
     with shared.db_session_factory() as db:
         db.query(Timer).filter(Timer.auto_delete == True).delete()
         db.commit()
 
     if frontend_dir:
-        frontend_dev.start(frontend_dir, getattr(config, 'BIND_IP', '127.0.0.1'), 8080, (use_ssl, ssl_cert, ssl_key))
+        frontend_dev.start(frontend_dir,
+                           getattr(config, 'BIND_IP', '127.0.0.1'),
+                           getattr(config, "FRONTEND_HTTP_PORT", 8080),
+                           getattr(config, "FRONTEND_HTTPS_PORT", 8443),
+                           (use_ssl, ssl_cert, ssl_key))
         print("Frontend Webserver")
 
     rules.init_timers()

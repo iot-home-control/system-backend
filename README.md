@@ -79,6 +79,12 @@ The configuration file is a text file consisting of multiple lines. Lines starti
 - `BIND_IP = "127.0.0.1"`
   sets the local address to use for incoming connections for websocket and grafana.
   This is optional and will default to `127.0.0.1` if not set.
+- `FRONTEND_PORT = 8080`
+  configures the HTTP port for the development frontend server.
+- `WS_PORT = 8765`
+  configures the port where the websocket listens.
+- `API_PORT = 8000`
+  configure the port where the Grafana endpoint and config server terminate.
 - `TIMEZONE="UTC"`
   defines the local time zone used for cron like timers.
   This is optional and will default to `UTC` if not set. 
