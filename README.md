@@ -17,11 +17,11 @@ The System Backend has support for rules and timers written in Python.
 ## Documentation:
 - [Installation guide](docs/install.md)
 - [Rule writing guide](docs/rules.md)
-- [MQTT topic structure](docs/mqtt_structure.md)
 
 ## Development guide
 - [How to run the test/development environment](docs/development.md)
-- [Thing configuration](https://github.com/iot-home-control/firmware/README.md)
+- [Thing configuration](https://github.com/iot-home-control/firmware/blob/main/README.md)
+- [MQTT topic structure](docs/mqtt_structure.md)
 
 ## Licensing
 The Home-Control backend is licensed under the [GNU AGPL 3](LICENSE).
