@@ -233,7 +233,7 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def check_access(level=AccessLevel.Authenticated):
+def check_access(level: AccessLevel = AccessLevel.Authenticated):
     def wrapper(f):
         @functools.wraps(f)
         async def check(db, websocket, *args, **kwargs):
