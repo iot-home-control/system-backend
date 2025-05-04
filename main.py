@@ -29,6 +29,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass, asdict
 from queue import Empty, Queue
+from types import SimpleNamespace
 from typing import List, Optional
 
 import bcrypt
@@ -54,6 +55,12 @@ try:
 except ModuleNotFoundError:
     pass
 
+try:
+    import _version
+except ImportError:
+    _version = SimpleNamespace()
+    _version.version = "unknown"
+
 logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
 rulelog = logging.getLogger("rule")
@@ -69,6 +76,7 @@ timer_checker_thread: Optional[threading.Thread] = None
 websocket_thread: Optional[threading.Thread] = None
 rule_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
+ws_stop_signal: Optional[asyncio.Future] = None
 connected_wss = set()
 sessions = dict()
 current_mqtt_connect_subscribe_mid: Optional[int] = None
@@ -182,15 +190,15 @@ def rule_executor_thread_main(queue):
             thing_id, thing_class, kind, data = event
             for rule in rules.triggers.get(thing_id, []):
                 with shared.db_session_factory() as db:
-                    rulestate = db.query(RuleState).get(rules.all_rules[rule])
+                    rulestate = db.get(RuleState, rules.all_rules[rule])
                     if rulestate and not rulestate.enabled:
                         continue
                     try:
                         if kind == "state":
-                            revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id),
-                                                     db.query(State).get(data))
+                            revent = rules.RuleEvent(rules.EventSource.Trigger, db.get(thing_class, thing_id),
+                                                     db.get(State, data))
                         elif kind == "event":
-                            revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
+                            revent = rules.RuleEvent(rules.EventSource.Event, db.get(thing_class, thing_id), data)
                         else:
                             rulelog.error(f"Unsupported rule event kind: {kind}")
                             break
@@ -241,7 +249,7 @@ class JsonEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def check_access(level=AccessLevel.Authenticated):
+def check_access(level: AccessLevel = AccessLevel.Authenticated):
     def wrapper(f):
         @functools.wraps(f)
         async def check(db, websocket, *args, **kwargs):
@@ -261,7 +269,7 @@ def check_access(level=AccessLevel.Authenticated):
 @check_access(level=AccessLevel.Local)
 async def ws_type_command(db, websocket, data):
     thing_id = data.get("id")
-    thing = db.query(Thing).get(thing_id)
+    thing = db.get(Thing, thing_id)
     if not thing:
         wslog.warning("Thing {} is unknown".format(thing_id))
         return
@@ -289,7 +297,7 @@ async def ws_type_last_seen(db, websocket, data):
 @check_access(level=AccessLevel.Authenticated)
 async def ws_type_create_or_edit(db, websocket, data):
     thing_id = data.get("id")
-    thing = db.query(Thing).get(thing_id) if thing_id else None
+    thing = db.get(Thing, thing_id) if thing_id else None
 
     data = dict(id=None,
                 views=[dict(value=v.id, text=v.name) for v in db.query(View).order_by(View.name, View.id).all()],
@@ -321,7 +329,7 @@ async def ws_type_edit_save(db, websocket, data):
     kind = data.get('editing')
     if kind == 'thing':
         data = data.get('data')
-        thing = db.query(Thing).get(data["id"]) if data.get("id") else None
+        thing = db.get(Thing, data["id"]) if data.get("id") else None
         new_thing = not thing
         if new_thing:
             thing = Thing()
@@ -338,7 +346,7 @@ async def ws_type_edit_save(db, websocket, data):
         else:
             thing.ordering = None
         prev_views = set(thing.views)
-        thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
+        thing.views = [db.get(View, int(e['value'])) for e in data['views']]
         db.commit()
         await websocket.send(json.dumps(dict(type="edit_ok")))
         await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])),
@@ -428,9 +436,9 @@ async def ws_get_timers(db, websocket, data):
         await websocket.send(json.dumps(dict(type="msg", value=data["msg"])))
 
 
-async def new_ws_session(websocket):
+async def new_ws_session(websocket: websockets.ServerConnection):
     import ipaddress
-    real_peer_address = websocket.request_headers.get("X-Real-IP", websocket.remote_address[0])
+    real_peer_address = websocket.request.headers.get("X-Real-IP", websocket.remote_address[0])
     addr = ipaddress.ip_address(real_peer_address)
 
     addr_is_in_local_net = False
@@ -478,7 +486,7 @@ async def send_rules(db, websocket, data):
         # TODO: this is user defined content, we should be aware of this
         for rule_name, rule_state in data.get("data").items():
             if rule_state and rule_state.get("enabled") is not None:
-                current_rule_state = db.query(RuleState).get(rule_name)
+                current_rule_state = db.get(RuleState, rule_name)
                 if current_rule_state is not None:
                     current_rule_state.enabled = rule_state.get("enabled")
                     continue
@@ -490,15 +498,16 @@ async def send_rules(db, websocket, data):
 
     all_rules = []
     for rule in rules.all_rules.values():
-        rule_state = db.query(RuleState).get(rule)
+        rule_state = db.get(RuleState, rule)
         enabled = rule_state.enabled if rule_state else None
         all_rules.append({"name": rule, "state": enabled})
     await websocket.send(json.dumps(dict(type="rules", value=all_rules)))
 
 
-async def handle_ws_connection(websocket, path):
-    wslog.info("Client {} connected".format(websocket.remote_address))
-    cookie_header = websocket.request_headers.get("Cookie", "")
+async def handle_ws_connection(websocket: websockets.ServerConnection):
+    client_addr = websocket.remote_address
+    wslog.info("Client {} connected".format(client_addr))
+    cookie_header = websocket.request.headers.get("Cookie", "")
     if not cookie_header:
         session = await new_ws_session(websocket)
     else:
@@ -575,13 +584,13 @@ async def handle_ws_connection(websocket, path):
                 else:
                     wslog.warning("Unknown msg_type {}".format(msg_type))
         else:
-            wslog.info("Client {} disconnected".format(websocket.remote_address))
+            wslog.info("Client {} disconnected".format(client_addr))
             connected_wss.remove(websocket)
             del sessions[websocket]
     except websockets.ConnectionClosed:
         connected_wss.remove(websocket)
         del sessions[websocket]
-        wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
+        wslog.warning(f"Cleaning up stale connection: {client_addr}")
 
 
 def ws_thread_main(ssl_data):
@@ -590,7 +599,7 @@ def ws_thread_main(ssl_data):
     logging.getLogger("websockets.server").setLevel(logging.INFO)
 
     bind_ip = getattr(config, "BIND_IP", "127.0.0.1")
-    port = 8765
+    port = getattr(config, "WS_PORT", 8765)
 
     use_ssl, ssl_cert, ssl_key = ssl_data
     ssl_context = None
@@ -605,14 +614,16 @@ def ws_thread_main(ssl_data):
             wslog.warning(f"Failed to enable SSL: {e}")
 
     try:
-        global ws_event_loop
-        ws_event_loop = asyncio.new_event_loop()
-        # ws_event_loop.set_debug(True)
-        asyncio.set_event_loop(ws_event_loop)
-        ws_server = websockets.serve(handle_ws_connection, bind_ip, port, ssl=ssl_context)
-        wslog.info(f"Listening on {bind_ip}:{port}")
-        ws_event_loop.run_until_complete(ws_server)
-        ws_event_loop.run_forever()
+        async def run_ws_server():
+            global ws_event_loop
+            ws_event_loop = asyncio.get_running_loop()
+            global ws_stop_signal
+            ws_stop_signal = asyncio.get_running_loop().create_future()
+            async with websockets.serve(handle_ws_connection, bind_ip, port, ssl=ssl_context):
+                wslog.info(f"Listening on {bind_ip}:{port}")
+                await ws_stop_signal
+
+        asyncio.run(run_ws_server())
         wslog.info("Shutting down")
     except Exception:
         wslog.exception("Uncaught Exception in ws_thread")
@@ -621,11 +632,11 @@ def ws_thread_main(ssl_data):
 async def ws_shutdown():
     if connected_wss:
         await asyncio.wait([asyncio.create_task(ws.close(reason="Shutting down")) for ws in connected_wss])
-    ws_event_loop.stop()
+    ws_stop_signal.set_result(None)
     await ws_event_loop.shutdown_asyncgens()
 
 
-def on_mqtt_connect(client, userdata, flags, rc):
+def on_mqtt_connect(client, _userdata, _flags, rc, _properties):
     if rc != 0:
         mqttlog.error("Can't connect to MQTT broker: %s",
                       mqttm.connack_string(rc))
@@ -638,7 +649,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         _, current_mqtt_connect_subscribe_mid = client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
-def on_mqtt_disconnect(client, userdata, rc):
+def on_mqtt_disconnect(client, _userdata, _flags, rc, _properties):
     if rc == 0:
         mqttlog.info("Disconnected from MQTT broker")
     else:
@@ -653,7 +664,7 @@ def on_mqtt_subscribe(client, _userdata, mid, _reason_codes_or_qos, _properties=
         client.publish("shellies/command", "announce")
 
 
-def on_mqtt_message(client, userdata, message):
+def on_mqtt_message(_client, _userdata, message):
     try:
         with shared.db_session_factory() as db:
             if message.topic.startswith("alive"):
@@ -694,7 +705,7 @@ def on_mqtt_message(client, userdata, message):
                         print("Thing {} {} sent new state".format(thing.type, thing.name))
                     res = thing.process_status(db, message.payload.decode("ascii"), data)
                     if res[2] == "state":
-                        msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
+                        msg = dict(type="states", states=[db.get(State, res[3]).to_dict()])
                         asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
                                                                      restrict_to_access_level=AccessLevel.Local),
                                                          ws_event_loop)
@@ -768,6 +779,7 @@ def reload_sig(sig, frame):
 
 
 @click.group()
+@click.version_option(_version.version, prog_name="home-control")
 def cli():
     pass
 
@@ -802,14 +814,20 @@ def main(ssl_cert: Optional[pathlib.Path], ssl_key: Optional[pathlib.Path], fron
     websocket_thread.start()
     print("WebSockets", end=", ")
 
-    grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'), prefix="/grafana")
+    grafana.start(bind_addr=getattr(config, 'BIND_IP', '127.0.0.1'),
+                  port=getattr(config, 'API_PORT', 8000),
+                  prefix="/grafana")
     print("Grafana API", end=', ' if frontend_dir else None)
     with shared.db_session_factory() as db:
         db.query(Timer).filter(Timer.auto_delete == True).delete()
         db.commit()
 
     if frontend_dir:
-        frontend_dev.start(frontend_dir, getattr(config, 'BIND_IP', '127.0.0.1'), 8080, (use_ssl, ssl_cert, ssl_key))
+        frontend_dev.start(frontend_dir,
+                           getattr(config, 'BIND_IP', '127.0.0.1'),
+                           getattr(config, "FRONTEND_HTTP_PORT", 8080),
+                           getattr(config, "FRONTEND_HTTPS_PORT", 8443),
+                           (use_ssl, ssl_cert, ssl_key))
         print("Frontend Webserver")
 
     rules.init_timers()

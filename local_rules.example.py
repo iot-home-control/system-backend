@@ -26,7 +26,7 @@ def button_rule(event):
     with shared.db_session_factory() as db:
         if event.state == "S":
             # Get RuleState of rule with "Rule Identifier".
-            rule_state = db.query(RuleState).get("Rule Identifier")
+            rule_state = db.get(RuleState, "Rule Identifier")
             # Toggle rule state
             rule_state.enabled = not rule_state.enabled
             db.commit()

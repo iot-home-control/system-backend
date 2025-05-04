@@ -18,8 +18,8 @@ from typing import List, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.orm
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import declarative_base
 
 import config
 
