@@ -539,7 +539,7 @@ async def ws_shutdown():
     await ws_event_loop.shutdown_asyncgens()
 
 
-def on_mqtt_connect(client, userdata, flags, rc):
+def on_mqtt_connect(client, _userdata, _flags, rc, _properties):
     if rc != 0:
         mqttlog.error("Can't connect to MQTT broker: %s",
                       mqttm.connack_string(rc))
@@ -552,7 +552,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
         _, current_mqtt_connect_subscribe_mid = client.subscribe(list(zip(ts, [0] * len(ts))))
 
 
-def on_mqtt_disconnect(client, userdata, rc):
+def on_mqtt_disconnect(client, _userdata, _flags, rc, _properties):
     if rc == 0:
         mqttlog.info("Disconnected from MQTT broker")
     else:
@@ -567,7 +567,7 @@ def on_mqtt_subscribe(client, _userdata, mid, _reason_codes_or_qos, _properties=
         client.publish("shellies/command", "announce")
 
 
-def on_mqtt_message(client, userdata, message):
+def on_mqtt_message(_client, _userdata, message):
     try:
         with shared.db_session_factory() as db:
             if message.topic.startswith("alive"):
