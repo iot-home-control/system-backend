@@ -69,6 +69,7 @@ timer_checker_thread: Optional[threading.Thread] = None
 websocket_thread: Optional[threading.Thread] = None
 rule_queue = Queue()
 ws_event_loop: Optional[asyncio.AbstractEventLoop] = None
+ws_stop_signal: Optional[asyncio.Future] = None
 connected_wss = set()
 sessions = dict()
 current_mqtt_connect_subscribe_mid: Optional[int] = None
@@ -346,9 +347,9 @@ async def ws_type_edit_save(db, websocket, data):
             mq.subscribe(thing.get_state_topic())
 
 
-async def new_ws_session(websocket):
+async def new_ws_session(websocket: websockets.ServerConnection):
     import ipaddress
-    real_peer_address = websocket.request_headers.get("X-Real-IP", websocket.remote_address[0])
+    real_peer_address = websocket.request.headers.get("X-Real-IP", websocket.remote_address[0])
     addr = ipaddress.ip_address(real_peer_address)
 
     addr_is_in_local_net = False
@@ -414,9 +415,10 @@ async def send_rules(db, websocket, data):
     await websocket.send(json.dumps(dict(type="rules", value=all_rules)))
 
 
-async def handle_ws_connection(websocket, path):
-    wslog.info("Client {} connected".format(websocket.remote_address))
-    cookie_header = websocket.request_headers.get("Cookie", "")
+async def handle_ws_connection(websocket: websockets.ServerConnection):
+    client_addr = websocket.remote_address
+    wslog.info("Client {} connected".format(client_addr))
+    cookie_header = websocket.request.headers.get("Cookie", "")
     if not cookie_header:
         session = await new_ws_session(websocket)
     else:
@@ -489,13 +491,13 @@ async def handle_ws_connection(websocket, path):
                 else:
                     wslog.warning("Unknown msg_type {}".format(msg_type))
         else:
-            wslog.info("Client {} disconnected".format(websocket.remote_address))
+            wslog.info("Client {} disconnected".format(client_addr))
             connected_wss.remove(websocket)
             del sessions[websocket]
     except websockets.ConnectionClosed:
         connected_wss.remove(websocket)
         del sessions[websocket]
-        wslog.warning(f"Cleaning up stale connection: {websocket.remote_address}")
+        wslog.warning(f"Cleaning up stale connection: {client_addr}")
 
 
 def ws_thread_main(ssl_data):
@@ -519,14 +521,16 @@ def ws_thread_main(ssl_data):
             wslog.warning(f"Failed to enable SSL: {e}")
 
     try:
-        global ws_event_loop
-        ws_event_loop = asyncio.new_event_loop()
-        # ws_event_loop.set_debug(True)
-        asyncio.set_event_loop(ws_event_loop)
-        ws_server = websockets.serve(handle_ws_connection, bind_ip, port, ssl=ssl_context)
-        wslog.info(f"Listening on {bind_ip}:{port}")
-        ws_event_loop.run_until_complete(ws_server)
-        ws_event_loop.run_forever()
+        async def run_ws_server():
+            global ws_event_loop
+            ws_event_loop = asyncio.get_running_loop()
+            global ws_stop_signal
+            ws_stop_signal = asyncio.get_running_loop().create_future()
+            async with websockets.serve(handle_ws_connection, bind_ip, port, ssl=ssl_context):
+                wslog.info(f"Listening on {bind_ip}:{port}")
+                await ws_stop_signal
+
+        asyncio.run(run_ws_server())
         wslog.info("Shutting down")
     except Exception:
         wslog.exception("Uncaught Exception in ws_thread")
@@ -535,7 +539,7 @@ def ws_thread_main(ssl_data):
 async def ws_shutdown():
     if connected_wss:
         await asyncio.wait([asyncio.create_task(ws.close(reason="Shutting down")) for ws in connected_wss])
-    ws_event_loop.stop()
+    ws_stop_signal.set_result(None)
     await ws_event_loop.shutdown_asyncgens()
 
 

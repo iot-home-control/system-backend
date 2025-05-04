@@ -1,7 +1,7 @@
 paho-mqtt==2.1.*
 psycopg2==2.9.*
 SQLAlchemy==2.0.*
-websockets==10.*
+websockets==15.0.*
 alembic==1.15.*
 python-dateutil==2.9.*
 click==8.1.*
