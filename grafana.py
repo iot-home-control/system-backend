@@ -117,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
                 for target, payload in targets:
                     if not target:
                         continue
-                    thing = db.query(Thing).get(target)
+                    thing = db.get(Thing, target)
                     if not thing:
                         continue
 

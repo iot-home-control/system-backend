@@ -174,15 +174,15 @@ def rule_executor_thread_main(queue):
             thing_id, thing_class, kind, data = event
             for rule in rules.triggers.get(thing_id, []):
                 with shared.db_session_factory() as db:
-                    rulestate = db.query(RuleState).get(rules.all_rules[rule])
+                    rulestate = db.get(RuleState, rules.all_rules[rule])
                     if rulestate and not rulestate.enabled:
                         continue
                     try:
                         if kind == "state":
-                            revent = rules.RuleEvent(rules.EventSource.Trigger, db.query(thing_class).get(thing_id),
-                                                     db.query(State).get(data))
+                            revent = rules.RuleEvent(rules.EventSource.Trigger, db.get(thing_class, thing_id),
+                                                     db.get(State, data))
                         elif kind == "event":
-                            revent = rules.RuleEvent(rules.EventSource.Event, db.query(thing_class).get(thing_id), data)
+                            revent = rules.RuleEvent(rules.EventSource.Event, db.get(thing_class, thing_id), data)
                         else:
                             rulelog.error(f"Unsupported rule event kind: {kind}")
                             break
@@ -253,7 +253,7 @@ def check_access(level: AccessLevel = AccessLevel.Authenticated):
 @check_access(level=AccessLevel.Local)
 async def ws_type_command(db, websocket, data):
     thing_id = data.get("id")
-    thing = db.query(Thing).get(thing_id)
+    thing = db.get(Thing, thing_id)
     if not thing:
         wslog.warning("Thing {} is unknown".format(thing_id))
         return
@@ -281,7 +281,7 @@ async def ws_type_last_seen(db, websocket, data):
 @check_access(level=AccessLevel.Authenticated)
 async def ws_type_create_or_edit(db, websocket, data):
     thing_id = data.get("id")
-    thing = db.query(Thing).get(thing_id) if thing_id else None
+    thing = db.get(Thing, thing_id) if thing_id else None
 
     data = dict(id=None,
                 views=[dict(value=v.id, text=v.name) for v in db.query(View).order_by(View.name, View.id).all()],
@@ -313,7 +313,7 @@ async def ws_type_edit_save(db, websocket, data):
     kind = data.get('editing')
     if kind == 'thing':
         data = data.get('data')
-        thing = db.query(Thing).get(data["id"]) if data.get("id") else None
+        thing = db.get(Thing, data["id"]) if data.get("id") else None
         new_thing = not thing
         if new_thing:
             thing = Thing()
@@ -330,7 +330,7 @@ async def ws_type_edit_save(db, websocket, data):
         else:
             thing.ordering = None
         prev_views = set(thing.views)
-        thing.views = [db.query(View).get(int(e['value'])) for e in data['views']]
+        thing.views = [db.get(View, int(e['value'])) for e in data['views']]
         db.commit()
         await websocket.send(json.dumps(dict(type="edit_ok")))
         await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])),
@@ -396,7 +396,7 @@ async def send_rules(db, websocket, data):
         # TODO: this is user defined content, we should be aware of this
         for rule_name, rule_state in data.get("data").items():
             if rule_state and rule_state.get("enabled") is not None:
-                current_rule_state = db.query(RuleState).get(rule_name)
+                current_rule_state = db.get(RuleState, rule_name)
                 if current_rule_state is not None:
                     current_rule_state.enabled = rule_state.get("enabled")
                     continue
@@ -408,7 +408,7 @@ async def send_rules(db, websocket, data):
 
     all_rules = []
     for rule in rules.all_rules.values():
-        rule_state = db.query(RuleState).get(rule)
+        rule_state = db.get(RuleState, rule)
         enabled = rule_state.enabled if rule_state else None
         all_rules.append({"name": rule, "state": enabled})
     await websocket.send(json.dumps(dict(type="rules", value=all_rules)))
@@ -608,7 +608,7 @@ def on_mqtt_message(client, userdata, message):
                         print("Thing {} {} sent new state".format(thing.type, thing.name))
                     res = thing.process_status(db, message.payload.decode("ascii"), data)
                     if res[2] == "state":
-                        msg = dict(type="states", states=[db.query(State).get(res[3]).to_dict()])
+                        msg = dict(type="states", states=[db.get(State, res[3]).to_dict()])
                         asyncio.run_coroutine_threadsafe(send_to_all(json.dumps(msg, cls=JsonEncoder),
                                                                      restrict_to_access_level=AccessLevel.Local),
                                                          ws_event_loop)
