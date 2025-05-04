@@ -29,6 +29,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass, asdict
 from queue import Empty, Queue
+from types import SimpleNamespace
 from typing import List, Optional
 
 import bcrypt
@@ -53,6 +54,12 @@ try:
     import local_rules
 except ModuleNotFoundError:
     pass
+
+try:
+    import _version
+except ImportError:
+    _version = SimpleNamespace()
+    _version.version = "unknown"
 
 logging.basicConfig(level=logging.DEBUG)
 mqttlog = logging.getLogger("mqtt")
@@ -686,6 +693,7 @@ def reload_sig(sig, frame):
 
 
 @click.group()
+@click.version_option(_version.version, prog_name="home-control")
 def cli():
     pass
 
