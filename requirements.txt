@@ -1,9 +1,9 @@
 paho-mqtt==2.1.*
-psycopg2-binary==2.9.*
-SQLAlchemy==1.4.*
+psycopg2==2.9.*
+SQLAlchemy==2.0.*
 websockets==10.*
-alembic==1.6.*
 python-dateutil==2.8.*
+alembic==1.15.*
 click==8.1.*
 itsdangerous==2.2.*
 bcrypt==4.3.*
