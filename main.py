@@ -348,7 +348,7 @@ async def ws_type_edit_save(db, websocket, data):
         prev_views = set(thing.views)
         thing.views = [db.get(View, int(e['value'])) for e in data['views']]
         db.commit()
-        await websocket.send(json.dumps(dict(type="edit_ok")))
+        await websocket.send(json.dumps(dict(kind="thing", type="edit_ok")))
         await send_to_all(json.dumps(dict(type="things", things=[thing.to_dict()])),
                           restrict_to_access_level=AccessLevel.Local)
         if prev_views != set(thing.views):
