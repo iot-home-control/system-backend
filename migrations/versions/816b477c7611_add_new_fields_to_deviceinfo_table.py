@@ -22,7 +22,7 @@ def upgrade():
     op.add_column('device_information', sa.Column('is_updatable', sa.Boolean(), nullable=True))
     op.add_column('device_information', sa.Column('data', sa.JSON(), nullable=True))
 
-    op.get_bind().execute("UPDATE device_information SET data ='{}'")
+    op.execute("UPDATE device_information SET data ='{}'")
 
     op.alter_column('device_information', 'data', nullable=False)
 
