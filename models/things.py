@@ -298,6 +298,9 @@ class ShellyEnergy(Thing):
 
     def process_status(self, db, state, data):
         DeviceInfo.update_device_info(db, self.device_id)
+        if data.get("is_shellyplug", False):
+            # Shelly energy meters report in Wh, Shelly Plugs report in Watt-minutes, so divide by 60 to also get Wh.
+            state = float(state) / 60.0
         state = f"unknown,{state}"
         return super().process_status(db, state, data)
 
@@ -312,10 +315,11 @@ class ShellyEnergy(Thing):
     @staticmethod
     def get_by_mqtt_topic(db, topic: List[str]):
         # shellies / node / emeter / vnode / function
+        # shellies / node / relay / vnode / energy
         node_type = 'shelly_energy'
         device_id = topic[1]
         vnode_id = topic[3]
-        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), dict(is_shellyplug="shellyplug" in device_id)
 
 
 class ESP32Smartmeter(Thing):
