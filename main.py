@@ -523,6 +523,8 @@ async def handle_ws_connection(websocket: websockets.ServerConnection):
             except TypeError as e:
                 wslog.exception(f"Failed to restore session data={session_data}")
                 session = await new_ws_session(websocket)
+            if session.permission != "authenticated":
+                session = await new_ws_session(websocket)
         else:
             session = await new_ws_session(websocket)
 
