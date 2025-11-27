@@ -114,7 +114,8 @@ def process_timers():
                 logger.warning(f"Timer '{timer.id}' has specifies function_id '{timer.function_id}' which is unknown")
                 logger.warning("Known timers: {}".format(pformat(functions)))
                 continue
-            timer_res = functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None), **timer.data.get("kwargs", {}))
+            if timer.enabled:
+                timer_res = functions[timer.function_id](rules.RuleEvent(rules.EventSource.Timer, None, None), **timer.data.get("kwargs", {}))
             if isinstance(timer, str) and timer_res == "DELETE":
                 db.delete(timer)
             elif "__cron__" in timer.data:
