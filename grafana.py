@@ -26,7 +26,7 @@ from urllib.parse import urlparse, parse_qs
 import dateutil.parser
 import sqlalchemy as sa
 
-from models.database import Thing, State, DataType, Trend
+from models.database import Thing, State, DataType, Trend, TrendMode
 from shared import db_session_factory
 
 _server: Optional[ThreadingHTTPServer] = None
@@ -140,7 +140,10 @@ class Handler(BaseHTTPRequestHandler):
                     for trend in trends.all():
                         if trend.t_avg is None or math.isnan(trend.t_avg):
                             continue
-                        datapoints.append([trend.t_avg, trend.start + trend.interval/2])
+                        trend_value = trend.t_avg
+                        if thing.get_trend_mode() == TrendMode.Last:
+                           trend_value = trend.t_max
+                        datapoints.append([trend_value, trend.start + trend.interval/2])
                     for when, value in states:
                         if value is None:
                             continue
