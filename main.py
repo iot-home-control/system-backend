@@ -977,7 +977,7 @@ def collate_trends(db):
 
     def collate_data_last(trends):
         count = sum(t.samples for t in trends)
-        last = trends[-1].v_max
+        last = trends[-1].t_max
         return count, last, last, last
 
     for idx in range(1, len(intervals)):
@@ -1002,7 +1002,7 @@ def collate_trends(db):
                 Trend.start.asc()).all():
             tid = trend.thing_id
             trend_mode = TrendMode.Average
-            trend_thing = Thing.query.get(tid)
+            trend_thing = db.query(Thing).get(tid)
             if trend_thing:
                 trend_mode = trend_thing.get_trend_mode()
 
