@@ -170,7 +170,7 @@ class Thing(Base):
         if last_state is None:
             # If this is the first state for this thing we can't do any checks/updates against any previous state.
             # Use the monotonic_offset as-is.
-            print(f"Applying {self.monotonic_offset=} to {value=}")
+            # print(f"Applying {self.monotonic_offset=} to {value=}")
             return self.monotonic_offset + value
 
         utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -178,17 +178,17 @@ class Thing(Base):
 
         if abs(self.monotonic_offset + value) < abs(last_state.status_float):
             # Current value (+ offset) is smaller than previous -> likely a reset.
-            po = self.monotonic_offset
+            # po = self.monotonic_offset
             self.monotonic_offset = last_state.status_float - value
-            print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected reset")
+            # print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected reset")
         elif uptime is not None and uptime < last_state_age:
             # Current value (+ offset) is larger than previous AND uptime is less than time till last state -> missed reset with large value change.
             # Current value was reached in the missed interval, add it to previous value to get the new offset.
-            po = self.monotonic_offset
+            # po = self.monotonic_offset
             self.monotonic_offset = last_state.status_float + value
-            print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected outage")
+            # print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected outage")
 
-        print(f"Applying {self.monotonic_offset=} to {value=}")
+        # print(f"Applying {self.monotonic_offset=} to {value=}")
         return self.monotonic_offset + value
 
 
