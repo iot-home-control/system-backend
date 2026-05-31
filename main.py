@@ -426,11 +426,11 @@ async def ws_create_or_edit_timer(db, websocket, data):
 
 @check_access(level=AccessLevel.Authenticated)
 async def ws_get_timers(db, websocket, data):
-    timers = db.query(Timer).all()
+    timers = db.query(Timer).order_by(Timer.id).all()
     timers_list = []
     rule_index = {rule[1]: idx for idx, rule in enumerate(rules.all_rules.items()) if rule[0] in timer.functions.values()}
     for timer_obj in timers:
-        timers_list.append({"id": timer_obj.id, "schedule": timer_obj.schedule, "enabled": timer_obj.enabled, "data": timer_obj.data, "rule_id": rule_index[rules.all_rules[timer.functions[timer_obj.function_id]]]})
+        timers_list.append({"id": timer_obj.id, "display_name": timer_obj.display_name, "schedule": timer_obj.schedule, "enabled": timer_obj.enabled, "data": timer_obj.data, "rule_id": rule_index[rules.all_rules[timer.functions[timer_obj.function_id]]]})
     await websocket.send(json.dumps(dict(type="timers", value=timers_list, rules=rule_index), default=serialize_datetime))
     if "msg" in data:
         await websocket.send(json.dumps(dict(type="msg", value=data["msg"])))

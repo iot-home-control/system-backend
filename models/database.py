@@ -223,6 +223,7 @@ class State(Base):
 class Timer(Base):
     __tablename__ = "timer"
     id = sa.Column(sa.String, primary_key=True)
+    display_name = sa.Column(sa.String)
     schedule = sa.Column(sa.DateTime(timezone=True), nullable=False)
     function_id = sa.Column(sa.String, nullable=False)
     enabled = sa.Column(sa.Boolean, default=True, nullable=False)
