@@ -290,15 +290,18 @@ class ShellyEnergy(Thing):
         return DataType.Float
 
     def get_state_topic(self):
-        return "shellies/{device_id}/emeter/{vnode_id}/total".format(type=self.type, device_id=self.device_id,
-                                                                     vnode_id=self.vnode_id)
+        if "shellyem" in self.device_id:
+            return "shellies/{device_id}/emeter/{vnode_id}/total".format(type=self.type, device_id=self.device_id,
+                                                                         vnode_id=self.vnode_id)
+        return "shellies/{device_id}/relay/{vnode_id}/energy".format(type=self.type, device_id=self.device_id,
+                                                                    vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
 
     def process_status(self, db, state, data):
         DeviceInfo.update_device_info(db, self.device_id)
-        if data.get("is_shellyplug", False):
+        if "shellyplug" in self.device_id:
             # Shelly energy meters report in Wh, Shelly Plugs report in Watt-minutes, so divide by 60 to also get Wh.
             state = float(state) / 60.0
         state = f"unknown,{state}"
@@ -323,7 +326,7 @@ class ShellyEnergy(Thing):
         node_type = 'shelly_energy'
         device_id = topic[1]
         vnode_id = topic[3]
-        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), dict(is_shellyplug="shellyplug" in device_id)
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
 
 
 class ESP32Smartmeter(Thing):
