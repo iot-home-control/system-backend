@@ -309,6 +309,10 @@ class ShellyEnergy(Thing):
         return 'Shelly Energy'
 
     @staticmethod
+    def get_trend_mode():
+        return TrendMode.Last
+
+    @staticmethod
     def get_mqtt_subscriptions():
         return 'shellies/+/emeter/+/total', 'shellies/+/relay/+/energy',
 
