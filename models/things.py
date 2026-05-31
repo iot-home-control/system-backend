@@ -548,8 +548,12 @@ class ShellyPlus(Switch):
         # shellplus<subtype>-<id> / status / <part>:<vnode>
         node_type = 'shellyplus'
         device_id = topic[0]
-        vnode_id = int(topic[-1].split(':')[-1])
-        return Thing.get_by_type_and_device_id(db, node_type, device_id, vnode_id), None
+
+        vnode_id = topic[-1].split(':')[-1]
+
+        if vnode_id == 'sys':
+            vnode_id = 0
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, int(vnode_id)), None
 
 
 class FrischluftWorksCO2Sensor(Thing):
