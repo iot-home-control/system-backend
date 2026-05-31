@@ -101,6 +101,7 @@ class Thing(Base):
                                        .scalar_subquery())
     views = sa.orm.relationship("View", secondary="thing_view", lazy="dynamic", back_populates="things")
     ordering = sa.Column(sa.Integer)
+    monotonic_offset = sa.Column(sa.Float, default=None)
 
     __mapper_args__ = {
         'polymorphic_on': type,
@@ -144,7 +145,7 @@ class Thing(Base):
         state.event_source = reason
         data_type = self.get_data_type()
         if data_type == DataType.Float:
-            state.status_float = float(value)
+            state.status_float = self.apply_monotonic_offset(db, float(value))
         elif data_type == DataType.Boolean:
             state.status_bool = value.lower() in ["on", "yes", "true", "1"]
         elif data_type == DataType.String:
@@ -158,6 +159,38 @@ class Thing(Base):
         db.commit()
         thing_state_cache[self.id] = state
         return self.id, type(self), "state", state.id
+
+    def apply_monotonic_offset(self, db, value: float, uptime: int | None = None) -> float:
+        # Exit early if we're not a thing with a float state or if monotonic offsets aren't enabled,
+        # i.e. monotonic_offset is None.
+        if self.monotonic_offset is None or self.get_data_type() != DataType.Float:
+            return value
+
+        last_state = self.last_state(db)
+        if last_state is None:
+            # If this is the first state for this thing we can't do any checks/updates against any previous state.
+            # Use the monotonic_offset as-is.
+            print(f"Applying {self.monotonic_offset=} to {value=}")
+            return self.monotonic_offset + value
+
+        utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
+        last_state_age = utc_now - last_state.when
+
+        if abs(self.monotonic_offset + value) < abs(last_state.status_float):
+            # Current value (+ offset) is smaller than previous -> likely a reset.
+            po = self.monotonic_offset
+            self.monotonic_offset = last_state.status_float - value
+            print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected reset")
+        elif uptime is not None and uptime < last_state_age:
+            # Current value (+ offset) is larger than previous AND uptime is less than time till last state -> missed reset with large value change.
+            # Current value was reached in the missed interval, add it to previous value to get the new offset.
+            po = self.monotonic_offset
+            self.monotonic_offset = last_state.status_float + value
+            print(f"Adjusting monotonic offset from {po} to {self.monotonic_offset} after detected outage")
+
+        print(f"Applying {self.monotonic_offset=} to {value=}")
+        return self.monotonic_offset + value
+
 
     @staticmethod
     def get_mqtt_subscriptions():
