@@ -29,7 +29,7 @@ Base = declarative_base()
 class DataType(Enum):
     Nothing = 0
     Float = 1
-    String = 2
+    JSON = 2
     Boolean = 3
 
 
@@ -148,8 +148,8 @@ class Thing(Base):
             state.status_float = self.apply_monotonic_offset(db, float(value))
         elif data_type == DataType.Boolean:
             state.status_bool = value.lower() in ["on", "yes", "true", "1"]
-        elif data_type == DataType.String:
-            state.status_str = value
+        elif data_type == DataType.JSON:
+            state.status_json = value
         elif data_type == DataType.Nothing:
             return self.id, type(self), "state", None
         else:
@@ -253,13 +253,13 @@ class State(Base):
     thing = sa.orm.relationship('Thing', backref=sa.orm.backref('states', lazy='dynamic'))
     when = sa.Column(sa.DateTime(timezone=True))
     event_source = sa.Column(sa.String)
-    status_str = sa.Column(sa.String)
+    status_json = sa.Column(sa.JSON)
     status_bool = sa.Column(sa.Boolean)
     status_float = sa.Column(sa.Float)
 
     def to_dict(self):
         return dict(id=self.id, thing_id=self.thing_id, when=self.when,
-                    event_source=self.event_source, status_str=self.status_str,
+                    event_source=self.event_source, status_json=self.status_json,
                     status_bool=self.status_bool, status_float=self.status_float)
 
 

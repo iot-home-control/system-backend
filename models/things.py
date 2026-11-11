@@ -93,7 +93,7 @@ class LEDs(Thing):
     }
 
     def get_data_type(self):
-        return DataType.String
+        return DataType.JSON
 
     @classmethod
     def display_name(cls):
