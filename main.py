@@ -282,6 +282,19 @@ async def ws_type_command(db, websocket, data):
     elif thing.type in ["shellytrv"]:
         val = data.get("value")
         thing.send_value(val)
+    elif thing.type in ["shellydimmer"]:
+        val = data.get("value")
+        try:
+            on = val.get("on")
+            if on is True:
+                thing.on()
+            elif on is False:
+                thing.off()
+            brightness = val.get("brightness")
+            if brightness is not None:
+                thing.set_brightness(brightness)
+        except AttributeError:
+            wslog.error(f"Malformed request: {data}")
     else:
         wslog.warning("Unsupported type for command: '{}'".format(thing.type))
 

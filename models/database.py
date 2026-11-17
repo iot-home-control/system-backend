@@ -136,7 +136,7 @@ class Thing(Base):
     def get_data_type(self):
         raise NotImplemented()
 
-    def process_status(self, db, state, data):
+    def process_status(self, db, state, data: dict):
         reason, value = state.split(",", maxsplit=1)
 
         state = State()
@@ -149,7 +149,7 @@ class Thing(Base):
         elif data_type == DataType.Boolean:
             state.status_bool = value.lower() in ["on", "yes", "true", "1"]
         elif data_type == DataType.JSON:
-            state.status_json = value
+            state.status_json = data
         elif data_type == DataType.Nothing:
             return self.id, type(self), "state", None
         else:
