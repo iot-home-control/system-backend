@@ -93,7 +93,7 @@ class LEDs(Thing):
     }
 
     def get_data_type(self):
-        return DataType.String
+        return DataType.JSON
 
     @classmethod
     def display_name(cls):
@@ -294,7 +294,7 @@ class ShellyEnergy(Thing):
             return "shellies/{device_id}/emeter/{vnode_id}/total".format(type=self.type, device_id=self.device_id,
                                                                          vnode_id=self.vnode_id)
         return "shellies/{device_id}/relay/{vnode_id}/energy".format(type=self.type, device_id=self.device_id,
-                                                                    vnode_id=self.vnode_id)
+                                                                     vnode_id=self.vnode_id)
 
     def get_action_topic(self):
         return None
@@ -556,6 +556,84 @@ class ShellyPlus(Switch):
         return Thing.get_by_type_and_device_id(db, node_type, device_id, int(vnode_id)), None
 
 
+class ShellyDimmer(Switch):
+    __mapper_args__ = {
+        'polymorphic_identity': 'shellydimmer'
+    }
+
+    @staticmethod
+    def get_mqtt_subscriptions():
+        return '+/status/light:0',
+
+    def get_action_topic(self):
+        return "{device_id}/rpc".format(device_id=self.device_id)
+
+    def get_data_type(self):
+        return DataType.JSON
+
+    def process_status(self, db, state, data):
+        """
+        shellyddimmerg3-xxx/status/light:0 {
+          "id": 0,
+          "source":  "MQTT" | "WS_in" | "switch"
+          "tag": null,
+          "output": true | false,
+          "brightness": 0..100,
+          "temperature": {
+            "tC": 50.5,
+            "tF": 122.9
+          }
+        }
+        """
+
+        DeviceInfo.update_device_info(db, self.device_id)
+        try:
+            data = json.loads(state)
+        except json.JSONDecodeError:
+            data = {}
+
+        on = data.get("output")
+        brightness = data.get("brightness")
+        filtered_data = {"on": on, "brightness": brightness}
+        return super().process_status(db, f"{'local' if data.get('source') == 'switch' else 'mqtt'},dummy-state",
+                                      filtered_data)
+
+    def on(self):
+        payload = {"id": 42, "src": "home-control", "method": "Light.Set",
+                   "params": {"id": self.vnode_id, "on": True}}
+        mq.publish(self.get_action_topic(), json.dumps(payload))
+
+    def off(self):
+        payload = {"id": 42, "src": "home-control", "method": "Light.Set",
+                   "params": {"id": self.vnode_id, "on": False}}
+        mq.publish(self.get_action_topic(), json.dumps(payload))
+
+    def set_brightness(self, brightness):
+        if brightness > 100:
+            brightness = 100
+        if brightness < 0:
+            brightness = 0
+        payload = {"id": 42, "src": "home-control", "method": "Light.Set",
+                   "params": {"id": self.vnode_id, "brightness": brightness}}
+        mq.publish(self.get_action_topic(), json.dumps(payload))
+
+    @staticmethod
+    def get_by_mqtt_topic(db, topic: List[str]):
+        # shellplus<subtype>-<id> / status / <part>:<vnode>
+        node_type = 'shellydimmer'
+        device_id = topic[0]
+
+        vnode_id = topic[-1].split(':')[-1]
+
+        if vnode_id == 'sys':
+            vnode_id = 0
+        return Thing.get_by_type_and_device_id(db, node_type, device_id, int(vnode_id)), None
+
+    @classmethod
+    def display_name(cls):
+        return 'Shelly Dimmer'
+
+
 class FrischluftWorksCO2Sensor(Thing):
     __mapper_args__ = {
         'polymorphic_identity': 'frischluftworks-co2'
@@ -609,6 +687,7 @@ thing_type_table = {
     "shelly_temperature": ShellyTemperature,
     "shelly_humidity": ShellyHumidity,
     "shellyplus": ShellyPlus,
+    "shellydimmer": ShellyDimmer,
     "frischluftworks-co2": FrischluftWorksCO2Sensor,
     "esp32_smartmeter_power": ESP32SmartmeterPower,
     "esp32_smartmeter_energy": ESP32SmartmeterEnergy,
